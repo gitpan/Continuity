@@ -1,5 +1,9 @@
 Revision history for Perl extension Continuity (from Darcs):
 
+Sun Oct 17 19:26:16 MST 2004  awwaiid@thelackthereof.org
+  tagged 0.2
+  * touch ups and documentation
+
 Sat Oct 16 19:18:18 MST 2004  awwaiid@thelackthereof.org
   * tagged 0.1
   * updated changes file

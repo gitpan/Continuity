@@ -11,13 +11,10 @@ sub setNumber {
 
 sub getNum {
   my $self = shift;
-  my $f = $self->disp(qq|
-    <form method=POST">
-      <input type=hidden name=pid value="$self->{continuity}->{newpid}">
+  my $f = $self->disp(qq{
       Enter Guess: <input name="num">
       <input type=submit value="Guess"><br>
-    </form>
-  |);
+  });
   return $f->{'num'};
 }
 
@@ -35,7 +32,7 @@ sub main {
   } until ($guess == $self->{number});
   print "You got it! My number was in fact $self->{number}.<br>\n";
   print "It took you $tries tries.<br>\n";
-  print "<a href='index.pl'>Play Again</a>";
+  print '<a href="index.pl">Play Again</a>';
 }
 
 1;

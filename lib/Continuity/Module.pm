@@ -1,5 +1,13 @@
 
 package Continuity::Module;
+
+=head1 NAME
+
+Continuity::Module - Base class for modules in a Continuity application
+
+=cut
+
+use strict;
 use Contize;
 
 sub new
