@@ -1,0 +1,12 @@
+Revision history for Perl extension Continuity (from Darcs):
+
+Sat Oct 16 19:18:18 MST 2004  awwaiid@thelackthereof.org
+  * tagged 0.1
+  * updated changes file
+  * more touch-ups for CPAN
+  * added all sorts of things
+  * Fixed by modifying the serializer
+  * close to working... but not quite
+  * added and removed debugging
+  * Initial import
+

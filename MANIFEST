@@ -1,0 +1,16 @@
+Changes
+Makefile.PL
+MANIFEST
+README
+t/Continuity.t
+lib/Continuity.pm
+META.yml                                 Module meta-data (added by MakeMaker)
+lib/Continuity/Application.pm
+lib/Continuity/Module.pm
+lib/Continuity/Template.pm
+lib/CGI/Session/Serialize/Continuity.pm
+eg/animals/Animals.pm
+eg/animals/index.pl
+eg/animals/merlyn-animals.pl
+eg/guess/Guess.pm
+eg/guess/index.pl
