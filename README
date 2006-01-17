@@ -1,5 +1,5 @@
-Continuity version 0.01
-=======================
+Continuity version 0.5
+======================
 
 The README is used to introduce the module and provide instructions on
 how to install the module, any machine dependencies it may have (for
@@ -25,16 +25,16 @@ DEPENDENCIES
 
 This module requires these other modules and libraries:
 
-  Contize
+  blah blah blah
 
 COPYRIGHT AND LICENCE
 
 Put the correct copyright and licence information here.
 
-Copyright (C) 2004 by Brock Wilcox <awwaiid@thelackthereof.org>
+Copyright (C) 2005 by Brock
 
 This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself, either Perl version 5.8.4 or,
+it under the same terms as Perl itself, either Perl version 5.8.7 or,
 at your option, any later version of Perl 5 you may have available.
 
 

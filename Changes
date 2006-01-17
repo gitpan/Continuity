@@ -1,16 +1,6 @@
-Revision history for Perl extension Continuity (from Darcs):
+Revision history for Perl extension Continuity.
 
-Sun Oct 17 19:26:16 MST 2004  awwaiid@thelackthereof.org
-  tagged 0.2
-  * touch ups and documentation
-
-Sat Oct 16 19:18:18 MST 2004  awwaiid@thelackthereof.org
-  * tagged 0.1
-  * updated changes file
-  * more touch-ups for CPAN
-  * added all sorts of things
-  * Fixed by modifying the serializer
-  * close to working... but not quite
-  * added and removed debugging
-  * Initial import
+0.5  Fri Dec  9 09:34:10 2005
+	- original version; created by h2xs 1.23 with options
+		-X -n Continuity -v 0.5
 

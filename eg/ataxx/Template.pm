@@ -1,7 +1,6 @@
 
-package Continuity::Template;
+package Template;
 
-use strict;
 use Embperl;
 
 sub new
@@ -11,15 +10,20 @@ sub new
   my $self = {};
   $self->{filename} = shift;
   bless $self, $class;
+  while(@_) {
+    $self->set(shift @_, shift @_);
+  }
   return $self;
 }
 
 sub set
 {
   my $self = shift;
-  my $name = shift;
-  my $val = shift;
-  $self->{var}->{$name} = $val;
+  while(@_) {
+    my $name = shift @_;
+    my $val = shift @_;
+    $self->{var}->{$name} = $val;
+  }
   return $val;
 }
 
@@ -30,7 +34,7 @@ sub render
 
   # Import all the vars into the Tpl namespace
   # There is probably a better way to do this!
-  foreach my $var (keys %{$self->{var}})
+  foreach $var (keys %{$self->{var}})
   {
     eval "\$Tpl::$var = \$self->{var}->{\$var};";
   }
@@ -45,7 +49,7 @@ sub render
   });
 
   # Kill all the vars we put into the Tpl namespace
-  foreach my $var (keys %{$self->{var}})
+  foreach $var (keys %{$self->{var}})
   {
     eval "\$Tpl::$var = undef;";
   }
@@ -54,4 +58,3 @@ sub render
 }
 
 1;
-
