@@ -1,6 +1,170 @@
-Revision history for Perl extension Continuity.
+Automatically generated from darcs patch changlog
+on Fri Apr 21 17:11:00 MST 2006
 
-0.5  Fri Dec  9 09:34:10 2005
-	- original version; created by h2xs 1.23 with options
-		-X -n Continuity -v 0.5
+Fri Apr 21 MST 2006  awwaiid@thelackthereof.org
+  * Add addtwo example
+  * Add highport.c utility
+  * re-enable closing stdout when done. was disabled for fastcgi stuff?
+  * random changes to examples that don't matter
+  * update distro-related stuff
+  * remove continuation tree test
+  * rename some fastcgi examples
 
+Fri Mar 17 MST 2006  awwaiid@thelackthereof.org
+  * Initial FastCGI implementation! Doesn't work for POST vars
+
+Tue Mar 14 MST 2006  awwaiid@thelackthereof.org
+  * No need to declare &main entrypoint, and use js to set focus
+
+Sat Mar  4 MST 2006  awwaiid@thelackthereof.org
+  * Misc updates / additions to examples
+  * Use HTTP::Request::AsCGI as a more-simple way to extract request params
+  * C::S::Simple can now yield values back to the server
+  * Print some extra no-caching headers in C::S::Simple
+  * Look for any path starting with app_path (use =~ instead of eq)
+  * Make mapper use PID param instead of cookie to track sessions
+  * Remove inventory example (now separate project)
+
+Sat Jan 21 MST 2006  awwaiid@thelackthereof.org
+  * update MANIFEST
+  * Tune Makefile.PL deps
+
+Tue Jan 17 MST 2006  awwaiid@thelackthereof.org
+  * Add eg/ readme
+  * Mention that Continuity.pm is just for documentation
+  * Added some skeleton POD and removed some cruft
+  * Add file for C::Adapt::HttpDaemon
+  * Add code to use C::Adapt::HttpDaemon
+  * remove some extraneous debugging from mapper
+  * change lib path for guess.pl example
+  * Split mapper out from C::Server
+  * Remove old dir
+
+Thu Jan 12 MST 2006  awwaiid@thelackthereof.org
+  * Fix dependency version
+
+Sat Jan  7 MST 2006  awwaiid@thelackthereof.org
+  * Update to inventory eg
+  * Add plain red/blue gifs for ataxx
+  * Updates to ataxx example
+
+Sat Dec 31 MST 2005  awwaiid@thelackthereof.org
+  * Add advanced counter example -- needs work
+  * Change counter example to use new lib path
+  * Add ataxx example
+
+Tue Dec 13 MST 2005  awwaiid@thelackthereof.org
+  * Move stuff around to fit better in CPAN
+
+Thu Dec  8 MST 2005  awwaiid@thelackthereof.org
+  * Add simple 'hello world' example
+  * in counter.pl, we don't need to specify main as teh entry point any longer
+  * remove getParams from (outdated) C:Client::CGI
+  * update PHP example
+  * make ::main the default starting point
+  * oh, add some content to mapper (still not used)
+  * add mapper file to archive (not used yet)
+
+Sat Dec  3 MST 2005  awwaiid@thelackthereof.org
+  * do not send content-type if no_content_type flag is set
+  * If no app-path is specified, send all content -> app
+
+Wed Nov 30 MST 2005  awwaiid@thelackthereof.org
+  * Update inventory app
+  * Fix other random apps to use revised API
+  * Fix animals game for new C:S:Simple API
+  * Shuffle things around a bit. rename docs dir to apps
+  * Formalize debugging mechanism in C::Server
+
+Mon Nov 28 MST 2005  awwaiid@thelackthereof.org
+  * Add guessing game demo
+  * Changes, including adding C::Server::Simple
+
+Sun Nov 20 MST 2005  awwaiid@thelackthereof.org
+  * TONS of changes (again) to make things back into working order
+
+Fri Nov 11 MST 2005  awwaiid@thelackthereof.org
+  * shufling things around
+
+Fri Nov 11 MST 2005  scott@slowass.net
+  * suggested user facing API
+  * Pass the app URL to the mainLoop
+  * move counter demo, and make it use new interface
+  * remove a bit more borked code
+  * more broken stuff
+  * Remove server.pl shortcut
+  * TONS OF CHANGES -- probably doesn't work
+
+Sun Nov  6 MST 2005  awwaiid@thelackthereof.org
+  * Update countup program for misc stuff
+  * Make a server.pl script to start server
+  * Change naming of modules
+
+Sat Nov  5 MST 2005  awwaiid@thelackthereof.org
+  * oh, apparently I need :form too
+  * er... another :standard -> :html from CGI
+  * 11 lines and now we have CRUD! (up from RU)
+  * Only need :html from CGI (of course, we don't actually NEED that)
+  * Doc for inventory table schema
+  * Make html_update use all fields. Use strict; and switch order for input names to $table:$col:$id
+  * Comments for the HTMLView component base and changed name from html_input to html_text
+  * Add a bunch of docs
+  * Track continuations by path (in addition to the cookie)
+
+Fri Nov  4 MST 2005  awwaiid@thelackthereof.org
+  * match feline's settings
+
+Thu Nov  3 MST 2005  awwaiid@thelackthereof.org
+  * Move stuff around
+  * Inventory demo, and misc changes
+
+Mon Oct 24 MST 2005  awwaiid@thelackthereof.org
+  * Proof-of-concept PHP integration
+
+Sun Oct 23 MST 2005  awwaiid@thelackthereof.org
+  * Figured out the ReuseAddr setting so I don't ahve to keep switching ports
+
+Sun Oct 16 MST 2005  awwaiid@thelackthereof.org
+  * mve merlyn-animals example
+
+Thu Oct 13 MST 2005  awwaiid@thelackthereof.org
+  * Added notes file
+  * Created document dir (served docs, not help docs). moved apps into there and altered them to not run the mainloop
+  * Add static serving, and serve .pl files as apps
+
+Tue Oct 11 MST 2005  awwaiid@thelackthereof.org
+  * Fix animals origin comment
+  * Added animals example, along with original from Merlyn
+  * Removed unnecessary distractions from server (flush stdout and extra session increment)
+
+Mon Oct 10 MST 2005  awwaiid@thelackthereof.org
+  * Large update -- track sessions
+
+Wed Sep 28 MST 2005  awwaiid@thelackthereof.org
+  * Move some code out of server and into client lib
+  * just another testing patch
+  * Minor changes of style
+
+Tue Sep 27 MST 2005  awwaiid@thelackthereof.org
+  * kill test
+
+Tue Sep 27 MST 2005  sillymonkeyf@epfarms.org
+  * testing patch
+
+Fri Sep 16 MST 2005  awwaiid@thelackthereof.org
+  * Random comment
+
+Thu Sep 15 MST 2005  awwaiid@thelackthereof.org
+  * Add the more advanced counter thingie
+  * Move content-type printer into CServe. Probably temporarily
+  * Significant changes, now does parameters!
+  * Catch up patch
+  * Fix package name
+  * Don't forget to be a valid module!
+  * Add perl #!
+  * Add count-up app
+  * Move and convert to lib
+  * Generalize a bit towards a multi-application server
+
+Wed Sep 14 MST 2005  awwaiid@thelackthereof.org
+  * Initial setup

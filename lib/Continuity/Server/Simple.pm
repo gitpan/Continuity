@@ -21,6 +21,7 @@ standard server.
 
 =cut
 
+
 sub execCont {
 
   my ($self, $cont, $request, $conn) = @_;
@@ -28,6 +29,9 @@ sub execCont {
   my $prev_select = select $conn; # Should maybe do fancier trick than this
 
   if(!$self->{no_content_type}) {
+    print "Cache-Control: private, no-store, no-cache\r\n";
+    print "Pragma: no-cache\r\n";
+    print "Expires: 0\r\n";
     print "Content-type: text/html\r\n\r\n";
   }
 
@@ -45,8 +49,8 @@ process
 =cut
 
 sub get_request {
-  my ($self) = @_;
-  yield;
+  my ($self, $retval) = @_;
+  yield $retval;
   my ($request) = @_;
   return $request;
 }
@@ -54,16 +58,24 @@ sub get_request {
 package HTTP::Request;
 
 use strict;
-use HTTP::Request::Params;
+use CGI;
+use HTTP::Request::AsCGI;
 
 # A minor ease-of-use extension for HTTP::Request
 # Given an HTTP::Request, return a nice hash of name/params
 # This is really just a thin wrapper around HTTP::Request::Params
 sub params {
   my ($request) = @_;
-  my $parse = HTTP::Request::Params->new({ req => $request });
-  my $params = $parse->params;
-  return $params;
+  my $cgi = $request->asCGI;
+  my $vars = $cgi->Vars;
+  return $vars;
+}
+
+sub asCGI {
+  my ($request) = @_;
+  my $s = HTTP::Request::AsCGI->new($request)->setup;
+  my $cgi = new CGI;
+  return $cgi;
 }
 
 =back

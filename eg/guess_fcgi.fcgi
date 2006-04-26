@@ -3,19 +3,25 @@
 use strict;
 use lib '../lib';
 use Continuity::Server::Simple;
+use Continuity::Adapt::FCGI;
+
+$SIG{__DIE__} = sub {
+  print STDERR "DIE! @_\n";
+};
 
 my $server = Continuity::Server::Simple->new(
-    port => 8081,
+    port => 8080,
+    new_cont_sub => \&main,
     app_path => '/app',
     debug => 3,
+    adaptor => 'Continuity::Adapt::FCGI',
 );
 
 $server->loop;
 
 sub getNum {
   print qq{
-    Enter Guess: <input name="num" id=num>
-    <script>document.getElementById('num').focus()</script>
+    Enter Guess: <input name="num">
     </form>
     </body>
     </html>
@@ -34,7 +40,7 @@ sub main {
     <html>
       <head><title>The Guessing Game</title></head>
       <body>
-        <form method=POST>
+        <form method=GET>
           Hi! I'm thinking of a number from 1 to 100... can you guess it?<br>
   };
   do {
