@@ -1,54 +1,56 @@
 #!/usr/bin/perl
 
-use strict;
 use lib '../lib';
-use Continuity::Server::Simple;
+use strict;
+use warnings;
+use Coro;
+use Coro::Event;
 
-my $server = Continuity::Server::Simple->new(
-    port => 8081,
-    app_path => '/app',
-    debug => 3,
-);
+use Continuity;
+my $server = new Continuity;
 
-$server->loop;
+Event::loop();
 
 sub getNum {
-  print qq{
+  my $request = shift;
+  $request->print( qq{
     Enter Guess: <input name="num" id=num>
     <script>document.getElementById('num').focus()</script>
     </form>
     </body>
     </html>
-  };
-  my $f = $server->get_request->params;
-  return $f->{'num'};
+  });
+  $request = $request->next;
+  my $num = $request->param('num');
+  return $num;
 }
 
 sub main {
-  # Ignore the first input, it just means they are viewing us
-  $server->get_request;
-  my $guess;
-  my $number = int(rand(100)) + 1;
-  my $tries = 0;
-  my $out = qq{
-    <html>
-      <head><title>The Guessing Game</title></head>
-      <body>
-        <form method=POST>
-          Hi! I'm thinking of a number from 1 to 100... can you guess it?<br>
-  };
-  do {
-    $tries++;
-    print $out;
-    $guess = getNum();
-    $out .= "It is smaller than $guess.<br>\n" if $guess > $number;
-    $out .= "It is bigger than $guess.<br>\n" if $guess < $number;
-  } until ($guess == $number);
-  print "You got it! My number was in fact $number.<br>\n";
-  print "It took you $tries tries.<br>\n";
-  print '<a href="/app">Play Again</a>';
-}
+  my $request = shift;
 
+  while(1) {
+    # Ignore the first input, it just means they are viewing us
+    $request->next;
+    my $guess;
+    my $number = int(rand(100)) + 1;
+    my $tries = 0;
+    my $out = qq{
+      <html>
+        <head><title>The Guessing Game</title></head>
+        <body>
+          <form method=POST>
+            Hi! I'm thinking of a number from 1 to 100... can you guess it?<br>
+    };
+    do {
+      $tries++;
+      $request->print($out);
+      $guess = getNum($request);
+      $out .= "It is smaller than $guess.<br>\n" if $guess > $number;
+      $out .= "It is bigger than $guess.<br>\n" if $guess < $number;
+    } until ($guess == $number);
+    $request->print("You got it! My number was in fact $number.<br>\n");
+    $request->print("It took you $tries tries.<br>\n");
+}}
 
 1;
 
