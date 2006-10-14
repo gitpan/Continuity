@@ -3,6 +3,7 @@
 use lib '../lib';
 use strict;
 use warnings;
+use Coro;
 use URI::Escape;
 
 =head1 Summary
@@ -15,9 +16,12 @@ code. We even implement our own 'prompt'...
 =cut
 
 use Continuity;
-my $server = new Continuity;
-
+use Continuity::Adapt::FCGI;
+my $server = new Continuity(
+  adaptor => Continuity::Adapt::FCGI->new
+);
 $server->loop;
+
 
 # Ask a question and keep asking until they answer
 sub prompt {
@@ -39,7 +43,6 @@ sub main {
 
   # After we're done with that we enter a loop. Forever.
   while(1) {
-    print STDERR "My request is $request\n";
     print STDERR "Just about to suspend...\n";
     my $add = $request->next->param('add');
     print STDERR "*** Just grabed next param\n";
