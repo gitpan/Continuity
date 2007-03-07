@@ -5,7 +5,6 @@ use strict;
 use warnings; # XXX -- development only
 use Data::Alias;
 use Coro;
-use Coro::Cont;
 use Coro::Channel;
 
 =head1 NAME
@@ -68,16 +67,9 @@ subset of the functionality.
 sub get_session_id_from_hit {
   my ($self, $request) = @_;
   alias my $hit_to_session_id = $self->{hit_to_session_id};
-  # this ip business is higherport.c-centric -- if the hit is from the local
-  # server, assume that is wrong, and go looking for something else. of course,
-  # this has problems -- what about proxies sending hits to other machines on
-  # the lan?
-  # There must be a more general-purpose way of deciding if we were proxied,
-  # and if so to use the Remote-Address header (maybe even just look for
-  # Remote-address in the first place to decide) -- awwaiid
   my $ip = $request->headers->header('Remote-Address')
            || $request->peerhost;
-  STDERR->print("Requested URI: ", $request->uri, "\n");
+  STDERR->print("        URI: ", $request->uri, "\n");
   (my $path) = $request->uri =~ m{/([^?]*)};
   my $session_id = '';
   if($self->{ip_session} && $ip) {
@@ -86,7 +78,7 @@ sub get_session_id_from_hit {
   if($self->{path_session} && $path) {
     $session_id .= '.'.$path;
   }
-  STDERR->print('=' x 30, ' ', $session_id, ' ', '=' x 30, "\n");
+  STDERR->print(" Session ID: ", $session_id, "\n");
   return $session_id;
   # our $sessionIdCounter;
   # print "Headers: " . $request->as_string();
@@ -116,7 +108,8 @@ sub map {
   alias my $request_queue = $self->{sessions}->{$session_id};
 
   if(! $request_queue) {
-    print STDERR "No request queue for this session, making a new one.\n";
+    print STDERR
+    "    Session: No request queue for this session, making a new one.\n";
     $request_queue = $self->new_request_queue($request, $session_id);
     # Don't need to stick it back into $self->{sessions} because of the alias
   }
@@ -170,27 +163,15 @@ implementation will optionally print the HTTP headers for you.
 =cut
 
 sub exec_cont {
- 
-  my $self = shift;
-  my $request = shift;
-  my $request_queue = shift;
+  my ($self, $request, $request_queue) = @_;
 
   # TODO: This might be one spot to hook STDOUT onto this request
- 
-  if(!$self->{no_content_type}) {
-    $request->print(
-        "Cache-Control: private, no-store, no-cache\r\n",
-         "Pragma: no-cache\r\n",
-         "Expires: 0\r\n",
-         "Content-type: text/html\r\n\r\n"
-    );
-  }
  
   # Drop the request into this end of the request_queue
   $request_queue->put($request);
 
   # XXX needed for FastCGI (because it is blocking...)
-  print STDERR "yielding to other things (for FCGI's sake)\n";
+  # print STDERR "yielding to other things (for FCGI's sake)\n";
   cede;
 
   # select $prev_select;
@@ -205,8 +186,6 @@ sub exec_cont {
 
 =item L<Coro>
 
-=item L<Coro::Cont>
-
 =back
 
 =head1 AUTHOR
@@ -216,7 +195,7 @@ sub exec_cont {
 
 =head1 COPYRIGHT
 
-Copyright (c) 2004-2006 Brock Wilcox <awwaiid@thelackthereof.org>. 
+Copyright (c) 2004-2007 Brock Wilcox <awwaiid@thelackthereof.org>. 
 All rights reserved.  
 This program is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

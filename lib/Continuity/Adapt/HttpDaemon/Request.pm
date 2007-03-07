@@ -34,8 +34,20 @@ sub next {
       and $self->request->conn
       and $self->request->conn->close;
 
-    # Here is where we actually wait
+    # Here is where we actually wait for the next request
     $self->request = $self->request_queue->get;
+  
+    unless($self->{no_content_type}) {
+      $self->request->conn->send_basic_header;
+      $self->print(
+          "Cache-Control: private, no-store, no-cache\r\n",
+           "Pragma: no-cache\r\n",
+           "Expires: 0\r\n",
+           "Content-type: text/html\r\n\r\n"
+      );
+    }
+
+    print STDERR "-----------------------------\n";
 
     return $self;
 }
@@ -49,7 +61,9 @@ sub print {
     my $self = shift; 
     fileno $self->request->conn or return undef;
     # Effectively, wait until we are ready to write (but no longer!)
-    Coro::Event->io( fd => $self->request->conn, poll => 'w', )->next->cancel;
+    my $conn_write_event = Coro::Event->io( fd => $self->request->conn, poll => 'w', );
+    $conn_write_event->next;
+    $conn_write_event->cancel;
     $self->request->conn->print(@_); 
     return $self;
 }
@@ -110,7 +124,9 @@ sub new {
     # $self->http_request->isa('HTTP::Request') or die;
     # $self->conn or die;
     # $self->queue or die;
-    print STDERR "Set up request. conn: $self->{conn} ($self)\n";
+    print STDERR "\n====== Got new request ======\n"
+               . "       Conn: $self->{conn}\n"
+               . "    Request: $self\n";
     return $self;
 }
 
@@ -155,7 +171,7 @@ sub AUTOLOAD {
   #print STDERR "Request AUTOLOAD: $method ( @_ )\n";
   my $self = shift;
   my $retval;
-  if({peerhost=>1,send_basic_header=>1,'print'=>1}->{$method}) {
+  if({peerhost=>1,send_basic_header=>1,'print'=>1,'send_redirect'=>1}->{$method}) {
     $retval = eval { $self->conn->$method(@_) };
     if($@) {
       warn "Continuity::Adapt::HttpDaemon::Request::AUTOLOAD: "
@@ -170,5 +186,22 @@ sub AUTOLOAD {
   }
   return $retval;
 }
+
+=head1 SEE ALSO
+
+L<Continuity>
+
+=head1 AUTHOR
+
+  Brock Wilcox <awwaiid@thelackthereof.org> - http://thelackthereof.org/
+  Scott Walters <scott@slowass.net> - http://slowass.net/
+
+=head1 COPYRIGHT
+
+  Copyright (c) 2004-2007 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
+  reserved.  This program is free software; you can redistribute it and/or
+  modify it under the same terms as Perl itself.
+
+=cut
 
 1;

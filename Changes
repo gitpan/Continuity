@@ -13,7 +13,7 @@ $f = `darcs changes`;
 # Chop off the timestamps (but keep the date)
 $f =~ s/\d\d:\d\d:\d\d ... //g;
 # Combine like sections. This might need a bit of work.
-1 while($f =~ s/^(... ... \d+ \d\d\d\d  [\w@\.\-]+)$(.*)^\1$/$1$2/gms);
+1 while($f =~ s/^(... ...\s+\d+ \d\d\d\d  [\w@\.\-]+)$(.*)^\1$/$1$2/gms);
 # Clear out the extra space we just made
 $f =~ s/\n\n\n/\n/g;
 print $out $f;
@@ -23,7 +23,56 @@ print $out $f;
 # ***************************************
 __DATA__
 
+Tue Mar  6 2007  awwaiid@thelackthereof.org
+  * Update MANIFEST
+  * Random attempt and comments on getting the $server->loop going without a warning
+  * Change leakfinder example to use new initial loop call
+  * Remove some dead code from Mapper.pm
+  * Fix mime type for static .js files in C::A::HttpDaemon
+  * Minor comment change for counter.pl example
+  * Clean ajax-push example a bit -- don't keep re-creating an event listener
+  * Slight update to README
+  * Make post-redirect example show cached input values
+
+Tue Jan 23 2007  awwaiid@thelackthereof.org
+  * Remove remaining references to Coro::Cont
+
+Sun Jan 21 2007  awwaiid@thelackthereof.org
+  * Update version number to 0.9
+  * Update version number to 0.9
+  * Remove dead code from C::A::HttpDaemon
+  * Update copyright date to 2007
+  * Use descriptive name for conn_write_event (instead of $e)
+  * Remove dead code and update copyright info in FCGI modules
+  * Update version requirements and author name in Makefile.PL
+
+Wed Jan 17 2007  awwaiid@thelackthereof.org
+  * Make eg/guess.pl use $server->loop (instead of calling Event::loop directly)
+  * Make C::A::HttpDaemon compatable with Coro 3.3
+
+Sat Nov 25 2006  awwaiid@thelackthereof.org
+  * Make .jpg|gif|png|css|ico|js static by default
+  * disable the FCGI-required extra yeild warning
+  * Kill some old comments
+  * Fix it so that you can get $server out of $request
+  * Move basic_header sending into Request (out of Continuity.pm)
+  * update comments
+  * Add post-redirect.pl example (does 303-redir after a POST, demonstrates BACK and RELOAD detection by using a PageID)
+  * Add simple chat.pl example (no JS)
+  * Update chag-ajax-push example (whitespace)
+  * Update addtwo.pl example
+  * Remove Map directory (no longer needed)
+
+Thu Oct 26 2006  awwaiid@thelackthereof.org
+  * Make chat example not care where it is run from
+
+Thu Oct 19 2006  awwaiid@thelackthereof.org
+  * Add chat-ajax-push demo
+
 Sat Oct 14 2006  awwaiid@thelackthereof.org
+  tagged 0.8
+  * Update changelog for 0.8 release
+  * Slight text change in documentation of Continuity.pm
   * Add fcgi.t to darcs
   * Update MANIFEST before 0.8
   * Don't warn about the known sub re-declarations
@@ -60,11 +109,7 @@ Sat Aug 12 2006  awwaiid@thelackthereof.org
 
 Tue Jul  4 2006  awwaiid@thelackthereof.org
   * Cancel IO event watchers once we've gotten an event
-
-Tue Jul  4 2006  awwaiid@thelackthereof.org
   * Ooops, fix scott's name on main .PM
-
-Tue Jul  4 2006  awwaiid@thelackthereof.org
   * Leakfinder (or... indicator I should say)
 
 Mon Jun 19 2006  awwaiid@thelackthereof.org
@@ -147,23 +192,11 @@ Tue Mar 14 2006  awwaiid@thelackthereof.org
 
 Sat Mar  4 2006  awwaiid@thelackthereof.org
   * Misc updates / additions to examples
-
-Sat Mar  4 2006  awwaiid@thelackthereof.org
   * Use HTTP::Request::AsCGI as a more-simple way to extract request params
-
-Sat Mar  4 2006  awwaiid@thelackthereof.org
   * C::S::Simple can now yield values back to the server
-
-Sat Mar  4 2006  awwaiid@thelackthereof.org
   * Print some extra no-caching headers in C::S::Simple
-
-Sat Mar  4 2006  awwaiid@thelackthereof.org
   * Look for any path starting with app_path (use =~ instead of eq)
-
-Sat Mar  4 2006  awwaiid@thelackthereof.org
   * Make mapper use PID param instead of cookie to track sessions
-
-Sat Mar  4 2006  awwaiid@thelackthereof.org
   * Remove inventory example (now separate project)
 
 Sat Jan 21 2006  awwaiid@thelackthereof.org
@@ -186,11 +219,7 @@ Thu Jan 12 2006  awwaiid@thelackthereof.org
 
 Sat Jan  7 2006  awwaiid@thelackthereof.org
   * Update to inventory eg
-
-Sat Jan  7 2006  awwaiid@thelackthereof.org
   * Add plain red/blue gifs for ataxx
-
-Sat Jan  7 2006  awwaiid@thelackthereof.org
   * Updates to ataxx example
 
 Sat Dec 31 2005  awwaiid@thelackthereof.org
@@ -203,29 +232,15 @@ Tue Dec 13 2005  awwaiid@thelackthereof.org
 
 Thu Dec  8 2005  awwaiid@thelackthereof.org
   * Add simple 'hello world' example
-
-Thu Dec  8 2005  awwaiid@thelackthereof.org
   * in counter.pl, we don't need to specify main as teh entry point any longer
-
-Thu Dec  8 2005  awwaiid@thelackthereof.org
   * remove getParams from (outdated) C:Client::CGI
-
-Thu Dec  8 2005  awwaiid@thelackthereof.org
   * update PHP example
-
-Thu Dec  8 2005  awwaiid@thelackthereof.org
   * make ::main the default starting point
-
-Thu Dec  8 2005  awwaiid@thelackthereof.org
   * oh, add some content to mapper (still not used)
-
-Thu Dec  8 2005  awwaiid@thelackthereof.org
   * add mapper file to archive (not used yet)
 
 Sat Dec  3 2005  awwaiid@thelackthereof.org
   * do not send content-type if no_content_type flag is set
-
-Sat Dec  3 2005  awwaiid@thelackthereof.org
   * If no app-path is specified, send all content -> app
 
 Wed Nov 30 2005  awwaiid@thelackthereof.org
@@ -256,38 +271,18 @@ Fri Nov 11 2005  scott@slowass.net
 
 Sun Nov  6 2005  awwaiid@thelackthereof.org
   * Update countup program for misc stuff
-
-Sun Nov  6 2005  awwaiid@thelackthereof.org
   * Make a server.pl script to start server
-
-Sun Nov  6 2005  awwaiid@thelackthereof.org
   * Change naming of modules
 
 Sat Nov  5 2005  awwaiid@thelackthereof.org
   * oh, apparently I need :form too
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * er... another :standard -> :html from CGI
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * 11 lines and now we have CRUD! (up from RU)
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * Only need :html from CGI (of course, we don't actually NEED that)
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * Doc for inventory table schema
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * Make html_update use all fields. Use strict; and switch order for input names to $table:$col:$id
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * Comments for the HTMLView component base and changed name from html_input to html_text
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * Add a bunch of docs
-
-Sat Nov  5 2005  awwaiid@thelackthereof.org
   * Track continuations by path (in addition to the cookie)
 
 Fri Nov  4 2005  awwaiid@thelackthereof.org
@@ -295,12 +290,59 @@ Fri Nov  4 2005  awwaiid@thelackthereof.org
 
 Thu Nov  3 2005  awwaiid@thelackthereof.org
   * Move stuff around
-
-Thu Nov  3 2005  awwaiid@thelackthereof.org
   * Inventory demo, and misc changes
 
 Mon Oct 24 2005  awwaiid@thelackthereof.org
   * Proof-of-concept PHP integration
+
+Sun Oct 23 2005  awwaiid@thelackthereof.org
+  * Figured out the ReuseAddr setting so I don't ahve to keep switching ports
+
+Sun Oct 16 2005  awwaiid@thelackthereof.org
+  * mve merlyn-animals example
+
+Thu Oct 13 2005  awwaiid@thelackthereof.org
+  * Added notes file
+  * Created document dir (served docs, not help docs). moved apps into there and altered them to not run the mainloop
+  * Add static serving, and serve .pl files as apps
+
+Tue Oct 11 2005  awwaiid@thelackthereof.org
+  * Fix animals origin comment
+  * Added animals example, along with original from Merlyn
+  * Removed unnecessary distractions from server (flush stdout and extra session increment)
+
+Mon Oct 10 2005  awwaiid@thelackthereof.org
+  * Large update -- track sessions
+
+Wed Sep 28 2005  awwaiid@thelackthereof.org
+  * Move some code out of server and into client lib
+  * just another testing patch
+  * Minor changes of style
+
+Tue Sep 27 2005  awwaiid@thelackthereof.org
+  * kill test
+
+Tue Sep 27 2005  sillymonkeyf@epfarms.org
+  * testing patch
+
+Fri Sep 16 2005  awwaiid@thelackthereof.org
+  * Random comment
+
+Thu Sep 15 2005  awwaiid@thelackthereof.org
+  * Add the more advanced counter thingie
+  * Move content-type printer into CServe. Probably temporarily
+  * Significant changes, now does parameters!
+  * Catch up patch
+  * Fix package name
+  * Don't forget to be a valid module!
+  * Add perl #!
+  * Add count-up app
+  * Move and convert to lib
+  * Generalize a bit towards a multi-application server
+
+Wed Sep 14 2005  awwaiid@thelackthereof.org
+  * Initial setup
+ integration
 
 Sun Oct 23 2005  awwaiid@thelackthereof.org
   * Figured out the ReuseAddr setting so I don't ahve to keep switching ports

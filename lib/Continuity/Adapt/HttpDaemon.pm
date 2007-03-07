@@ -13,6 +13,7 @@ use HTTP::Status;
 
 use Continuity::Adapt::HttpDaemon::Request;
 
+
 do {
 
     # HTTP::Daemon isn't Coro-friendly and attempting to diddle HTTP::Daemon's
@@ -37,7 +38,9 @@ do {
             ${*$sock}{'httpd_daemon'} = $self;
             return wantarray ? ($sock, $peer) : $sock;
         } elsif($!{EAGAIN}) {
-            Coro::Event->io(fd => fileno $self, poll => 'r', )->next->cancel;
+            my $socket_read_event = Coro::Event->io(fd => fileno $self, poll => 'r', );
+            $socket_read_event->next;
+            $socket_read_event->cancel;
             goto try_again; 
         } else {
             return;
@@ -50,7 +53,9 @@ do {
 
     sub _need_more {   
         my $self = shift;
-        Coro::Event->io(fd => fileno $self, poll => 'r', $_[1] ? ( timeout => $_[1] ) : ( ), )->next->cancel;
+        my $e = Coro::Event->io(fd => fileno $self, poll => 'r', $_[1] ? ( timeout => $_[1] ) : ( ), );
+        $e->next;
+        $e->cancel;
         my $n = sysread($self, $_[0], 2048, length($_[0]));
         $self->reason(defined($n) ? "Client closed" : "sysread: $!") unless $n;
         $n;
@@ -96,6 +101,7 @@ sub new {
   my %args = @_;
   my $self = bless { 
     docroot => delete $args{docroot},
+    server => delete $args{server},
   }, $class;
 
   # Set up our http daemon
@@ -187,8 +193,9 @@ sub send_static {
   open my $magic, '-|', 'file', '-bi', $path;
   my $mimetype = <$magic>;
   chomp $mimetype;
-  # And for now we'll make a raw exception for .html
+  # And for now we'll make a raw exception for .html and .js
   $mimetype = 'text/html' if $path =~ /\.html$/ or ! $mimetype;
+  $mimetype = 'application/javascript' if $path =~ /\.js$/;
   print $c "Content-type: $mimetype\r\n\r\n";
   open my $file, '<', $path or return;
   while(read $file, my $buf, 8192) {
@@ -211,12 +218,12 @@ L<Continuity>
 
 =head1 AUTHOR
 
-  Brock Wilcox <awwaiid@thelackthereof.org>
-  http://thelackthereof.org/
+  Brock Wilcox <awwaiid@thelackthereof.org> - http://thelackthereof.org/
+  Scott Walters <scott@slowass.net> - http://slowass.net/
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2006 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
+  Copyright (c) 2004-2007 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
   reserved.  This program is free software; you can redistribute it and/or
   modify it under the same terms as Perl itself.
 

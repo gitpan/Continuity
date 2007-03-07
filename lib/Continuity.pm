@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.8';
+our $VERSION = '0.9';
 
 =head1 NAME
 
@@ -56,7 +56,6 @@ use warnings; # XXX -- while in devolopment
 
 use IO::Handle;
 use Coro;
-use Coro::Cont;
 use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
 
@@ -98,7 +97,8 @@ sub new {
     debug => 4, # XXX
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
-    staticp => sub { 0 },   
+    #staticp => sub { 0 },   
+    staticp => sub { $_[0]->url->path =~ m/\.(jpg|gif|png|css|ico|js)$/ },   
     @_,  
   }, $class;
 
@@ -163,7 +163,7 @@ sub new {
   
       # Send the basic headers all the time
       # Don't think the can method will work with the AUTOLOAD trick and wrapper
-      $r->send_basic_header;
+      # $r->send_basic_header;
   
       if($self->{staticp}->($r)) {
           $self->debug(3, "Sending static content... ");
@@ -191,20 +191,25 @@ sub new {
     STDERR->print("Done processing request, waiting for next\n");
     
   };
+  #cede;
 
   return $self;
-
 }
 
-# This never returns, and all it does is execute Coro's Event:: loop
+=head2 C<< $server->loop() >>
 
-{
-  no warnings;
-  sub loop {
-    my ($self) = @_;
-    Coro::Event::loop;
-    return $self;
-  }
+Calls Coro::Event::loop (through exportation). This never returns!
+
+=cut
+
+sub loop {
+  my ($self) = @_;
+
+  # XXX passing $self is completely invalid. loop is supposed to take a timeout
+  # as the parameter, but by passing self it creates a semi-valid timeout.
+  # Without this, with the current Coro and Event, it doesn't work.
+  Coro::Event::loop($self);
+  #Coro::Event::loop();
 }
 
 sub debug {
@@ -274,7 +279,7 @@ L<Continuity::Adapt::HttpDaemon::Request>, L<Coro>.
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2006 Brock Wilcox <awwaiid@thelackthereof.org>. All
+  Copyright (c) 2004-2007 Brock Wilcox <awwaiid@thelackthereof.org>. All
   rights reserved.  This program is free software; you can redistribute it
   and/or modify it under the same terms as Perl itself.
 
