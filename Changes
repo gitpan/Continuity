@@ -5,7 +5,6 @@
 open my $out,"+<",$0;
 seek $out,0,0;
 seek DATA,0,0;
-$d = '';
 print $out $l while(($l = <DATA>) ne "__DATA__\n");
 print $out "$l\n";
 # Get the Darcs changelog
@@ -22,6 +21,66 @@ print $out $f;
 # *** This is the actual Changelog :) ***
 # ***************************************
 __DATA__
+
+Tue Apr 10 2007  awwaiid@thelackthereof.org
+  * Update Changes for 0.10 release
+  * Remove dead code from Changes ;)
+  * Clean and simplify eg/counter.pl
+  * Update version in Continuity.pm and README to 0.10
+  * Comment out FCGI requirement in Makefile.PL
+  * another MANIFEST update
+  * add/remove some files to the MANIFEST
+  * Add jquery library for js-based examples
+  * disable fcgi.t -- it needs to be written better :)
+  * Switch default session tracking to cookie-only
+
+Sun Apr  8 2007  scott@slowass.net
+  * writes were getting cut off at 65536, maybe as the non-blocking socket was ready but then went un-ready as it chocked on the data it was supposed to output, so we break output up into neater little bundles
+
+Sat Apr  7 2007  scott@slowass.net
+  * support no_content_type as an arg to Continuity::new, relay it to the adapter correctly
+
+Fri Apr  6 2007  scott@slowass.net
+  * multi-line parameter values were getting cut off -- oops!
+
+Sat Mar 31 2007  scott@slowass.net
+  * fix up peek example to work hopefully reliably and with the goal of making a module out of it and splitting it off from the example
+
+Sat Mar 31 2007  awwaiid@thelackthereof.org
+  * Slight debugging format change
+  * slight formatting fix for eg/chat.pl (simple chat)
+  * Add eg/guess-peek.pl -- this peeks at the secret number!
+  * update guess.pl to use session cookies
+
+Fri Mar 30 2007  awwaiid@thelackthereof.org
+  * Formatting changes for debugging output
+  * If *_session is set, use them even if they're blank
+  * Significant improvement of code and docs for chat-ajax-push demo, and now uses jquery in the .js
+  * Add the jquery library, for the revised chat-ajax-push demo
+
+Thu Mar 29 2007  scott@slowass.net
+  * cookie session support!
+
+Wed Mar 28 2007  scott@slowass.net
+  * support for immediately execute objects sent over the request queue
+  * fix endless loop in last refactor, send_basic_header called from RequestHolder on the C::Request ob directly rather than on self and AUTOLOADed, cleaned up AUTOLOAD, Mapper directly creates RequestHolder rather than going through adapter
+
+Wed Mar 28 2007  awwaiid@thelackthereof.org
+  * Add in some stuff to run the new restructured code
+  * generic RequestHolder object, unified interfaces for the request adapters, API docs and base class in Continuity::Request
+  * Improve self-modifying changelog grouping regex
+  * Slight debugging and simplification for getting at the session_id
+
+Mon Mar 26 2007  awwaiid@thelackthereof.org
+  * Preliminary (ie non-working) query-based session tracking
+  * Add some more prerequisite checks in Makefile.PL
+
+Sun Mar 18 2007  scott@slowass.net
+  * lots of docs on execution contexts, ip_session, path_session, etc
+  * add docs about ip_session, etc, remove refs in docs to ::Server, add sanity to docpath handling
+
+Wed Mar  7 2007  awwaiid@thelackthereof.org
+  * Use LWP::MediaTypes to calculate static content mime types for HttpDaemon adaptor
 
 Tue Mar  6 2007  awwaiid@thelackthereof.org
   * Update MANIFEST
@@ -294,55 +353,6 @@ Thu Nov  3 2005  awwaiid@thelackthereof.org
 
 Mon Oct 24 2005  awwaiid@thelackthereof.org
   * Proof-of-concept PHP integration
-
-Sun Oct 23 2005  awwaiid@thelackthereof.org
-  * Figured out the ReuseAddr setting so I don't ahve to keep switching ports
-
-Sun Oct 16 2005  awwaiid@thelackthereof.org
-  * mve merlyn-animals example
-
-Thu Oct 13 2005  awwaiid@thelackthereof.org
-  * Added notes file
-  * Created document dir (served docs, not help docs). moved apps into there and altered them to not run the mainloop
-  * Add static serving, and serve .pl files as apps
-
-Tue Oct 11 2005  awwaiid@thelackthereof.org
-  * Fix animals origin comment
-  * Added animals example, along with original from Merlyn
-  * Removed unnecessary distractions from server (flush stdout and extra session increment)
-
-Mon Oct 10 2005  awwaiid@thelackthereof.org
-  * Large update -- track sessions
-
-Wed Sep 28 2005  awwaiid@thelackthereof.org
-  * Move some code out of server and into client lib
-  * just another testing patch
-  * Minor changes of style
-
-Tue Sep 27 2005  awwaiid@thelackthereof.org
-  * kill test
-
-Tue Sep 27 2005  sillymonkeyf@epfarms.org
-  * testing patch
-
-Fri Sep 16 2005  awwaiid@thelackthereof.org
-  * Random comment
-
-Thu Sep 15 2005  awwaiid@thelackthereof.org
-  * Add the more advanced counter thingie
-  * Move content-type printer into CServe. Probably temporarily
-  * Significant changes, now does parameters!
-  * Catch up patch
-  * Fix package name
-  * Don't forget to be a valid module!
-  * Add perl #!
-  * Add count-up app
-  * Move and convert to lib
-  * Generalize a bit towards a multi-application server
-
-Wed Sep 14 2005  awwaiid@thelackthereof.org
-  * Initial setup
- integration
 
 Sun Oct 23 2005  awwaiid@thelackthereof.org
   * Figured out the ReuseAddr setting so I don't ahve to keep switching ports

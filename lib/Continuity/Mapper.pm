@@ -3,9 +3,12 @@ package Continuity::Mapper;
 
 use strict;
 use warnings; # XXX -- development only
+use CGI;
 use Data::Alias;
 use Coro;
 use Coro::Channel;
+
+use Continuity::RequestHolder;
 
 =head1 NAME
 
@@ -25,15 +28,79 @@ possibily) based on client IP address plus URL.
 
 Create a new session mapper.
 
-L<Contuinity::Server> does the following by default:
+L<Contuinity> does the following by default:
 
-  $server = Continuity::Server->new( 
+  $server = Continuity->new( 
     adapter  => Continuity::Adapter::HttpDaemon->new,
     mapper   => Continuity::Mapper->new( callback => \::main )
   );
 
-If you subclass this, you'll need to explicitly pass an instance of your mapper
-during server creation (including the callback).
+L<Continuity::Mapper> fills in the following defaults:
+
+    ip_session => 1,
+    path_session => 0,
+    cookie_session => 'sid',
+    query_session => 'sid',
+    assign_session_id => sub { join '', map int rand 10, 1..20 },
+
+Only C<cookie_session> or C<query_session> should be set, but not both.
+C<assign_session_id> specifies a call-back that generates a new session id value
+for when C<cookie_session> is enabled and no cookie of the given name (C<sid> 
+in this example) is passed.
+C<assign_session_id> likewise gets called when C<query_session> is set but
+no GET/POST parameter of the specified name (C<sid> in this example) is
+passed.
+Use of C<query_session> is not recommended as to keep the user associated 
+with their session, every link and form in the application must be written to
+include the session id.
+XXX todo: how the user can find out what assign_session_id came up for
+the current user to pass this value back to itself.
+
+For each incoming HTTP hit, L<Continuity> must use some criteria for 
+deciding which execution context to send that hit to.
+For each of these that are set true, that element of the request
+will be used as part of the key that maps requests to execution
+context (remembering that Continuity hopes to give each user one
+unique execution context).
+An "execution context" is just a unique call to the
+whichever function is specified or passed as the callback, where
+several such instances of the same function will be running at the
+same time, each being paused to wait for more data or
+unpaused when data comes in.
+
+In the simple case, each "user" gets their own execution context.
+By default, users are distinguished by their IP address, which is a very bad
+way to try to make this distinction.
+Corporate users behind NATs and AOL users (also behind a NAT) will all
+appear to be the same few users.
+
+C<path_session> may be set true to use the pathname of the request, such as C<foo>
+in C<http://bar.com/foo?baz=quux>, as part of the criteria for deciding which
+execution context to associate with that hit.
+This makes it possible to write applications that give one user more than
+one execution contexts.
+This is necessary to run server-push concurrently with push from the user
+back to the server (see the examples directory) or to have sub-applications
+running on the same port, each having its own state seperate from the others.
+
+Cookies aren't issued or read by L<Continuity>, but we plan to add
+support for reading them.
+I expect the name of the cookie to look for would be passed in,
+or perhaps a subroutine that validates the cookies and returns it
+(possibily stripped of a secure hash) back out.
+Other code (the main application, or another session handling module
+from CPAN, or whatnot) will have the work of picking session IDs.
+
+To get more sophisticated or specialized session ID computing logic,
+subclass this object, re-implement C<get_session_id_from_hit()> to
+suit your needs, and then pass in an instance of your subclass to 
+as the value for C<mapper> in the call to
+C<< Continuity->new) >>.
+Here's an example of that sort of constructor call:
+
+  $server = Continuity->new( 
+    mapper   => Continuity::Mapper::StrongRandomSessionCookies->new( callback => \::main )
+  );
 
 =cut
 
@@ -42,17 +109,20 @@ sub new {
   my $class = shift; 
   my $self = bless { 
       sessions => { },
-      ip_session => 1,
+      ip_session => 0,
       path_session => 0,
-      cookie_session => 0,
+      cookie_session => 'sid',
+      query_session => 0,
+      assign_session_id => sub { join '', 1+int rand 9, map int rand 10, 2..20 },
       @_,
   }, $class;
+  STDERR->print("cookie_session: $self->{cookie_session} ip_session: $self->{ip_session}\n");
   $self->{callback} or die "Mapper: callback not set.\n";
   return $self;
 
 }
 
-=head2 $session_id = $mapper->get_session_id_from_hit($request)
+=head2 $mapper->get_session_id_from_hit($request)
 
 Uses the defined strategies (ip, path, cookie) to create a session identifier
 for the given request. This is what you'll most likely want to override, if
@@ -63,28 +133,54 @@ subset of the functionality.
 
 =cut
 
-# Needs the request to support: headers->header, peerhost, uri
 sub get_session_id_from_hit {
   my ($self, $request) = @_;
   alias my $hit_to_session_id = $self->{hit_to_session_id};
-  my $ip = $request->headers->header('Remote-Address')
-           || $request->peerhost;
-  STDERR->print("        URI: ", $request->uri, "\n");
-  (my $path) = $request->uri =~ m{/([^?]*)};
   my $session_id = '';
-  if($self->{ip_session} && $ip) {
-    $session_id .= '.'.$ip;
+  my $sid;
+  STDERR->print("        URI: ", $request->uri, "\n");
+
+  # IP based sessions
+  if($self->{ip_session}) {
+    my $ip = $request->headers->header('Remote-Address')
+             || $request->peerhost;
+    $session_id .= '.' . $ip;
   }
-  if($self->{path_session} && $path) {
-    $session_id .= '.'.$path;
+
+  # Path sessions
+  if($self->{path_session}) {
+    my ($path) = $request->uri =~ m{/([^?]*)};
+    $session_id .= '.' . $path;
   }
+
+  # Query sessions
+  if($self->{query_session}) {
+    $sid = $request->param($self->{query_session});
+    STDERR->print("    Session: got query '$sid'\n");
+  }
+
+  # Cookie sessions
+  if($self->{cookie_session}) {
+    # use Data::Dumper 'Dumper'; STDERR->print("request->headers->header(Cookie): ", Dumper($request->headers->header('Cookie')));
+    (my $cookie) = grep /^$self->{cookie_session}=/, $request->headers->header('Cookie');
+    $cookie =~ s/.*?=//;
+    $sid = $cookie if $cookie;
+    STDERR->print("    Session: got cookie '$sid'\n");
+  }
+
+  if(($self->{query_session} or $self->{cookie_session}) and ! $sid) {
+      $sid = $self->{assign_session_id}->($request);
+      $request->set_cookie( CGI->cookie( -name => $self->{cookie_session}, -value => $sid, -expires => '+2d', ) ) if $self->{cookie_session};
+      # XXX somehow record the sid in the request object in case of query_session
+      STDERR->print("    New SID: $sid\n");
+  }
+
+  $session_id .= '.' . $sid if $sid;
+
   STDERR->print(" Session ID: ", $session_id, "\n");
+
   return $session_id;
-  # our $sessionIdCounter;
-  # print "Headers: " . $request->as_string();
-  #  my $pid = $request->params->{pid};
-  #  my $cookieHeader = $request->header('Cookie');
-  #  if($cookieHeader =~ /sessionid=(\d+)/) 
+
 }
 
 =head2 $mapper->map($request)
@@ -102,15 +198,16 @@ So actually C<< map() >> just drops the request into the correct session queue.
 
 sub map {
 
-  my ($self, $request) = @_;
-  my $session_id = $self->get_session_id_from_hit($request);
+  my ($self, $request, $adapter) = @_;
+  my $session_id = $self->get_session_id_from_hit($request, $adapter);
 
   alias my $request_queue = $self->{sessions}->{$session_id};
+  STDERR->print("    Session: count " . (scalar keys %{$self->{sessions}}) . "\n");
 
   if(! $request_queue) {
     print STDERR
-    "    Session: No request queue for this session, making a new one.\n";
-    $request_queue = $self->new_request_queue($request, $session_id);
+    "    Session: No request queue for this session ($session_id), making a new one.\n";
+    $request_queue = $self->new_request_queue($session_id);
     # Don't need to stick it back into $self->{sessions} because of the alias
   }
 
@@ -134,9 +231,10 @@ sub new_request_queue {
   my $session_id = shift or die;
 
   # Create a request_queue, and hook the adaptor up to feed it
-  my $request_queue = Coro::Channel->new(2);
-  my $request_holder = $self->server->adaptor->new_requestHolder(
-    request_queue => $request_queue
+  my $request_queue = Coro::Channel->new();
+  my $request_holder = Continuity::RequestHolder->new(
+    request_queue => $request_queue,
+    session_id    => $session_id,
   );
 
   # async just puts the contents into the global event queue to be executed

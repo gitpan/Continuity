@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.9';
+our $VERSION = '0.10';
 
 =head1 NAME
 
@@ -58,6 +58,7 @@ use IO::Handle;
 use Coro;
 use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
+use Continuity::RequestHolder;
 
 =head2 C<< $server = Continuity->new(...) >>
 
@@ -97,8 +98,8 @@ sub new {
     debug => 4, # XXX
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
-    #staticp => sub { 0 },   
-    staticp => sub { $_[0]->url->path =~ m/\.(jpg|gif|png|css|ico|js)$/ },   
+    staticp => sub { $_[0]->url->path =~ m/\.(jpg|gif|png|css|ico|js)$/ },
+    no_content_type => 0,
     @_,  
   }, $class;
 
@@ -116,35 +117,41 @@ sub new {
       docroot => $self->{docroot},
       server => $self,
       debug => $self->{debug},
+      no_content_type => $self->{no_content_type},
       $self->{port} ? (LocalPort => $self->{port}) : (),
     );
   } elsif(! ref $self->{adaptor}) {
     die "Not a ref, $self->{adaptor}\n";
-  } else {
-    # Make sure that the provided adaptor knows who we are
-    $self->{adaptor}->{server} = $self;
-    print STDERR "Continuity using adaptor: $self->{adaptor}\n";
   }
 
   # Set up the default mapper.
   # The mapper associates execution contexts (continuations) with requests 
   # according to some criteria.  The default version uses a combination of
   # client IP address and the path in the request.  
+
   if(!$self->{mapper}) {
+
     require Continuity::Mapper;
+
+    my %optional;
+    $optional{LocalPort} = $self->{port} if defined $self->{port};
+    for(qw/ip_session path_session query_session cookie_session assign_session_id/) {
+        # be careful to pass 0 too if the user specified 0 to turn it off
+        $optional{$_} = $self->{$_} if defined $self->{$_}; 
+    }
+
     $self->{mapper} = Continuity::Mapper->new(
       debug => $self->{debug},
       callback => $self->{callback},
       server => $self,
-      $self->{port} ? (LocalPort => $self->{port}) : (),
-      ip_session => $self->{ip_session} || 1,
-      path_session => $self->{path_session} || 0,
-      cookie_session => $self->{cookie_session} || 0,
-      param_session => $self->{param_session} || 0,
+      %optional,
     );
+
   } else {
+
     # Make sure that the provided mapper knows who we are
     $self->{mapper}->{server} = $self;
+
   }
 
   async {
@@ -178,7 +185,7 @@ sub new {
       # basic security checks like .. abuse in GET paths, we should provide
       # a default implementation -- preferably one already on CPAN.
       # Here's a way: ask the mapper.
-      # Right now, map takes one of our Continuity::Request objects (with conn and request set) and sets queue
+      # Right now, map takes one of our Continuity::RequestHolder objects (with conn and request set) and sets queue
 
       # This actually finds the thing that wants it, and gives it to it
       # (executes the continuation)

@@ -1,13 +1,14 @@
 # http://module-build.sourceforge.net/META-spec.html
 #XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
 name:         Continuity
-version:      0.9
+version:      0.10
 version_from: lib/Continuity.pm
 installdirs:  site
 requires:
     Coro:                          3.3
     Data::Alias:                   1.01
     HTTP::Daemon:                  1.36
+    Module::Reload:                1.07
 
 distribution_type: module
 generated_by: ExtUtils::MakeMaker version 6.30_01
