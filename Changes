@@ -23,6 +23,7 @@ print $out $f;
 __DATA__
 
 Tue Apr 10 2007  awwaiid@thelackthereof.org
+  * Apparently 0.1 is less than 0.9! crazy. lets make CPAN happy
   * Update Changes for 0.10 release
   * Remove dead code from Changes ;)
   * Clean and simplify eg/counter.pl
