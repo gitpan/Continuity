@@ -114,6 +114,7 @@ sub new {
       cookie_session => 'sid',
       query_session => 0,
       assign_session_id => sub { join '', 1+int rand 9, map int rand 10, 2..20 },
+      implicit_first_next => 1,
       @_,
   }, $class;
   STDERR->print("cookie_session: $self->{cookie_session} ip_session: $self->{ip_session}\n");
@@ -162,8 +163,8 @@ sub get_session_id_from_hit {
   # Cookie sessions
   if($self->{cookie_session}) {
     # use Data::Dumper 'Dumper'; STDERR->print("request->headers->header(Cookie): ", Dumper($request->headers->header('Cookie')));
-    (my $cookie) = grep /^$self->{cookie_session}=/, $request->headers->header('Cookie');
-    $cookie =~ s/.*?=//;
+    (my $cookie) = grep /\b$self->{cookie_session}=/, $request->headers->header('Cookie');
+    $cookie =~ s/.*\b$self->{cookie_session}=([^;]+).*/$1/;
     $sid = $cookie if $cookie;
     STDERR->print("    Session: got cookie '$sid'\n");
   }
@@ -240,6 +241,7 @@ sub new_request_queue {
   # async just puts the contents into the global event queue to be executed
   # at some later time
   async {
+    $request_holder->next if $self->{implicit_first_next};
     $self->{callback}->($request_holder, @_);
 
     # If the callback exits, the session is over

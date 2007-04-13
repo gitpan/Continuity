@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.91';
+our $VERSION = '0.92';
 
 =head1 NAME
 
@@ -9,43 +9,145 @@ Continuity - Abstract away statelessness of HTTP using continuations, for statef
 =head1 SYNOPSIS
 
   #!/usr/bin/perl
-  use strict;
-  use Coro;
 
+  use strict;
   use Continuity;
+
   my $server = new Continuity;
+  $server->loop;
 
   sub main {
     my $request = shift;
     $request->next; # Get the first actual request
-    # must do a substr to chop the leading '/'
-    my $name = substr($request->url->path, 1) || 'World';
-    $request->print("Hello, $name!");
-    $request = $request->next();
-    $name = substr($request->url->path, 1) || 'World';
-    $request->print("Hello to you too, $name!");
+    $request->print("Your name: <form><input type=text name=name></form>");
+    $request->next;
+    my $name = $request->param('name');
+    $request->print("Hello $name!");
   }
-
-  $server->loop;
 
 =head1 DESCRIPTION
 
-Continuity is a library (not a framework) to simplify Web applications.  Each
-session is written and runs as if it were a persistant application, and is
-able to request additional input at any time without exiting.  Applications
-call a method, C<$request->next>, which temporarily gives up control of the
-CPU and then (eventually) returns the next request.  Put another way,
-coroutines make the HTTP Web appear stateful.
-
-Beyond the basic idea of using coroutines to build Web apps, some logic is
-required to decide how to associate incoming requests with coroutines, and
-logic is required to glue the daemonized application server to the Web.
-Sample implementations of both are provided (specifically, an adapter to run a
-dedicated Webserver built out of L<HTTP::Request> is included), and these
-implementations are useful for many situations and are subclassable.
-
 This is ALPHA software, and feedback/code is welcomed.
-See the Wiki in the references below for things the authors are unhappy with.
+
+Continuity is a library to simplify web applications. Each session is written
+and runs as a persistant application, and is able to request additional input
+at any time without exiting. This is significantly different from the
+traditional CGI model of web applications in which a program is restarted for
+each new request.
+
+The program is passed a $request variable which holds the request (including
+any form data) sent from the browser. In concept, this is a lot like a C<$cgi>
+object from CGI.pm with one very very significant difference. At any point in
+the code you can call $request->next. Your program will then block, waiting for
+the next request in the session. Since the program doesn't actually halt, all
+state is preserved, including lexicals -- similar to doing C<$line=E<lt>E<gt>>
+in a command-line application.
+
+=head1 GETTING STARTED
+
+First, check out the small demo applications in the eg/ directory of the
+distribution. Sample code there rages from simple counters to more complex
+multi-user ajax applications.
+
+Declare all your globals, then declare and create your server. Parameters to
+the server will determine how sessions are tracked, what ports it listens on,
+what will be served as static content, and things of that nature. Then call the
+C<loop> method of the server, which will get things going (and never exits).
+
+  use Continuity;
+  my $server = Continuity->new( port => 8080 );
+  $server->loop;
+
+Continuity must have a starting point for creating a new instance of your
+application. The default is to C<\&::main>, which is passed the C<$request>
+handle. See the L<Continuity::Request> documentation for details on the methods
+available from the C<$request> object beyond this introduction.
+
+  sub main {
+    my $request = shift;
+    # ...
+  }
+
+Outputting to the client (that is, sending text to the browser) is done by
+calling the C<$request-E<gt>print(...)> method, rather than the plain C<print> used
+in CGI.pm applications.
+
+  $request->print("Hello, guvne'<br>");
+  $request->print("'ow ya been?");
+
+HTTP query parameters (both GET and POST) are also gotten through the
+C<$request> handle, by calling C<$p = $request-E<gt>param('p')>.
+
+  # If they go to http://webapp/?x=7
+  my $input = $request->param('x');
+  # now $input is 7
+
+Once you have output your HTML, call C<$request-E<gt>next> to wait for the next
+response from the client browser. While waiting other sessions will handle
+other requests, allowing the single process to handle many simultaneous
+sessions.
+
+  $request->print("Name: <form><input type=text name=n></form>");
+  $request->next;                   # <-- this is where we suspend execution
+  my $name = $request->param('n');  # <-- start here once they submit
+
+Anything declared lexically (using my) inside of C<main> is private to the
+session, and anything you make global is available to all sessions. When
+C<main> returns the session is terminated, so that another request from the
+same client will get a new session. Only one continuation is ever executing at
+a given time, so there is no immediate need to worry about locking shared
+global variables when modifying them.
+
+=head1 ADVANCED USAGE
+
+Merely using the above code can completely change the way you think about web
+application infrastructure. But why stop there? Here are a few more things to
+ponder.
+
+Since Continuity is based on L<Coro>, we also get to use L<Coro::Event>. This
+means that you can set timers to wake a continuation up after a while, or you
+can have inner-continuation signaling by watch-events on shared variables.
+
+For AJAX applications, we've found it handy to give each user multiple
+sessions. In the chat-ajax-push demo each user gets a session for sending
+messages, and a session for receiving them. The receiving session uses a
+long-running request (aka COMET) and watches the globally shared chat message
+log. When a new message is put into the log, it pushes to all of the ajax
+listeners.
+
+Don't forget about those pretty little lexicals you have at your disposal.
+Taking a hint from the Seaside folks, instead of regular links you could have
+callbacks that trigger a anonymous subs. Your code could easily look like:
+
+  my $x;
+  $link1 = gen_link('This is a link to stuff', sub { $x = 7  });
+  $link2 = gen_link('This is another link',    sub { $x = 42 });
+  $request->print($link1, $link2);
+  $request->next;
+  process_links($request);
+  # Now use $x
+
+To scale a Continuity-based application beyond a single process you need to
+investigate the keywords "session affinity". The Seaside folks have a few
+articles on various experiments they've done for scaling, see the wiki for
+links and ideas. Note, however, that premature optimization is evil. We
+shouldn't even be talking about this.
+
+=head1 EXTENDING AND CUSTOMIZING
+
+This library is designed to be extensible but have good defaults. There are two
+important components which you can extend or replace.
+
+The Adaptor, such as the default L<Continuity::Adapt::HttpDaemon>, actually
+makes the HTTP connections with the client web broswer. If you want to use
+FastCGI or even a non-HTTP protocol, then you will create an adaptor.
+
+The Mapper, such as the default L<Continuity::Mapper>, identifies incoming
+requests from The Adaptor and maps them to instances of your program. In other
+words, Mappers keep track of sessions, figuring out which requests belong to
+which session. The default mapper can identify sessions based on any
+combination of cookie, ip address, and URL path. Override The Mapper to create
+alternative session identification and management.
 
 =head1 METHODS
 
@@ -81,6 +183,26 @@ Arguments:
 =item C<staticp> -- defaults to C<< sub { 0 } >>, used to indicate whether any request is for static content
 
 =item C<debug> -- defaults to C<4> at the moment ;)
+
+=back
+
+Arguments passed to the default adaptor:
+
+=over 1
+
+=item C<port> -- the port on which to listen
+
+=back
+
+Arguments passed to the default mapper:
+
+=over 1
+
+=item C<cookie_session> -- set to name of cookie or undef for no cookies
+
+=item C<ip_session> -- set to true to use ip-addresses for session tracking
+
+=item C<path_session> -- set to true to use URL path for session tracking
 
 =back
 
@@ -126,8 +248,8 @@ sub new {
 
   # Set up the default mapper.
   # The mapper associates execution contexts (continuations) with requests 
-  # according to some criteria.  The default version uses a combination of
-  # client IP address and the path in the request.  
+  # according to some criteria. The default version uses a combination of
+  # client IP address and the path in the request.
 
   if(!$self->{mapper}) {
 
@@ -272,17 +394,24 @@ with the next item in the queue (or waits until there is one).
 Most of the time you will have pretty empty queues -- they are mostly there for
 safety, in case you have a lot of incoming requests and running sessions.
 
+For further internal development documentation, please see the wiki or email
+me.
+
 =head1 SEE ALSO
+
+See the Wiki for development information, more waxing philosophic, and links to
+similar technologies such as L<http://seaside.st/>.
 
 Website/Wiki: L<http://continuity.tlt42.org/>
 
-L<Continuity::Adapt::HttpDaemon>, L<Continuity::Mapper>,
-L<Continuity::Adapt::HttpDaemon::Request>, L<Coro>.
+L<Continuity::Request>, L<Continuity::Mapper>,
+L<Continuity::Adapt::HttpDaemon>, L<Coro>
 
 =head1 AUTHOR
 
   Brock Wilcox <awwaiid@thelackthereof.org> - http://thelackthereof.org/
   Scott Walters <scott@slowass.net> - http://slowass.net/
+  Special thanks to Marc Lehmann for creating (and maintaining) Coro
 
 =head1 COPYRIGHT
 
