@@ -7,7 +7,7 @@ use warnings;  # XXX dev
 use Continuity::Request;
 use base 'Continuity::Request';
 
-use Coro;
+use Continuity::RequestHolder;
 
 use IO::Handle;
 use Cwd;
@@ -16,7 +16,6 @@ use HTTP::Daemon;
 use HTTP::Status;
 use LWP::MediaTypes qw(add_type);
 
-use Continuity::RequestHolder;
 
 # HTTP::Daemon::send_file_response uses LWP::MediaTypes to guess the
 # Content-Type of a file.  Unfortunately, its list of known extensions is
@@ -34,7 +33,6 @@ do {
     # asking for breaking from future versions of HTTP::Daemon.
 
     package HTTP::Daemon;
-
     use Errno;
     use Fcntl uc ':default';
 
@@ -49,7 +47,7 @@ do {
             ${*$sock}{'httpd_daemon'} = $self;
             return wantarray ? ($sock, $peer) : $sock;
         } elsif($!{EAGAIN}) {
-            my $socket_read_event = Coro::Event->io(fd => fileno $self, poll => 'r', );
+            my $socket_read_event = Coro::Event->io(fd => fileno $self, poll => 'r', ); # XXX should create this once per call rather than ocne per EGAIN
             $socket_read_event->next;
             $socket_read_event->cancel;
             goto try_again; 
@@ -78,9 +76,12 @@ do {
 
 Continuity::Adapt::HttpDaemon - Use HTTP::Daemon to get HTTP requests
 
+Continuity::Adapt::HttpDaemon::Request - an HTTP::Daemon based request
+
 =head1 DESCRIPTION
 
-This is the default and reference HTTP adaptor for L<Continuity>. 
+This is the default and reference HTTP adaptor for L<Continuity>. It comes in
+two parts, the server connector and the request interface.
 
 An adaptor interfaces between the continuation server (L<Continuity>) and the
 web server (HTTP::Daemon, FastCGI, etc). It provides incoming HTTP requests to
@@ -167,11 +168,12 @@ sub map_path {
   my $self = shift;
   my $path = shift() || '';
   my $docroot = $self->{docroot} || '';
+  $docroot .= '/' if $docroot and $docroot ne '.' and $docroot !~ m{/$};
   # some massaging, also makes it more secure
   $path =~ s/%([0-9a-fA-F][0-9a-fA-F])/chr hex $1/ge;
   $path =~ s%//+%/%g unless $docroot;
   $path =~ s%/\.(?=/|$)%%g;
-  1 while $path =~ s%/[^/]+/\.\.(?=/|$)%%;
+  $path =~ s%/[^/]+/\.\.(?=/|$)%%g;
 
   # if($path =~ m%^/?\.\.(?=/|$)%) then bad
 
@@ -194,10 +196,11 @@ sent text or HTML on, MIME aside.
 sub send_static {
   my ($self, $r) = @_;
   my $c = $r->conn or die;
-  my $path = $self->map_path($r->url->path) or do { 
-       $self->debug(1, "can't map path: " . $r->url->path); $c->send_error(404); return; 
+  my $url = $r->url;
+  $url =~ s{\?.*}{};
+  my $path = $self->map_path($url) or do { 
+       $self->debug(1, "can't map path: " . $url); $c->send_error(404); return; 
   };
-  # $path =~ s{^/}{}g;
   unless (-f $path) {
       $c->send_error(404);
       return;
@@ -219,8 +222,8 @@ sub debug {
 #
 
 package Continuity::Adapt::HttpDaemon::Request;
-use strict;
 
+use strict;
 use vars qw( $AUTOLOAD );
 
 =for comment
@@ -241,6 +244,10 @@ that (it's used for file uploads).
 # XXX pass in multiple param names, get back multiple param values
 
 Delegates requests off to the request object it was initialized from.
+
+In other words: Continuity::Adapt::HttpDaemon is the ongoing running HttpDaemon
+process, and Continuity::Adapt::HttpDaemon::Request is individual requests sent
+through.
 
 =cut
 
@@ -291,6 +298,7 @@ sub param {
 
 sub end_request {
     my $self = shift;
+    $self->{write_event}->cancel if $self->{write_event};
     $self->{conn}->close if $self->{conn};
 }
 
@@ -319,7 +327,25 @@ sub send_basic_header {
     1;
 }
 
-sub print { my $self = shift; $self->{conn}->print(@_); }
+sub print { 
+    my $self = shift; 
+    $self->{write_event} ||= Coro::Event->io(fd => fileno $self->{conn}, poll => 'w', );
+    my $e = $self->{write_event};
+    if(length $_[0] > 4096) {
+        while(@_) { 
+            my $x = shift;
+            while(length $x > 4096) { $e->next; $self->{conn}->print(substr $x, 0, 4096, ''); }
+            $e->next; $self->{conn}->print($x) 
+        }
+    } else {
+        $e->next; $self->{conn}->print(@_); 
+    }
+    return 1;
+}
+
+sub uri { $_[0]->{http_request}->uri(); }
+
+# sub query_string { $_[0]->{http_request}->query_string(); } # nope, doesn't exist in HTTP::Headers
 
 sub immediate { }
 

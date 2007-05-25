@@ -109,6 +109,7 @@ sub new {
   my $class = shift; 
   my $self = bless { 
       sessions => { },
+      sessions_last_access => { },
       ip_session => 0,
       path_session => 0,
       cookie_session => 'sid',
@@ -117,7 +118,6 @@ sub new {
       implicit_first_next => 1,
       @_,
   }, $class;
-  STDERR->print("cookie_session: $self->{cookie_session} ip_session: $self->{ip_session}\n");
   $self->{callback} or die "Mapper: callback not set.\n";
   return $self;
 
@@ -151,6 +151,8 @@ sub get_session_id_from_hit {
   # Path sessions
   if($self->{path_session}) {
     my ($path) = $request->uri =~ m{/([^?]*)};
+    $path =~ s/\.//g; # ./ and / are the same thing, and hey -- we use the dot as our seperator anyway
+    $path ||= '/';  # needed to make it consistant
     $session_id .= '.' . $path;
   }
 
@@ -163,8 +165,7 @@ sub get_session_id_from_hit {
   # Cookie sessions
   if($self->{cookie_session}) {
     # use Data::Dumper 'Dumper'; STDERR->print("request->headers->header(Cookie): ", Dumper($request->headers->header('Cookie')));
-    (my $cookie) = grep /\b$self->{cookie_session}=/, $request->headers->header('Cookie');
-    $cookie =~ s/.*\b$self->{cookie_session}=([^;]+).*/$1/;
+    (my $cookie) =  map $_->[1], grep $_->[0] eq $self->{cookie_session}, map [ m/(.*?)=(.*)/ ], split /; */, $request->headers->header('Cookie') || '';
     $sid = $cookie if $cookie;
     STDERR->print("    Session: got cookie '$sid'\n");
   }
@@ -202,6 +203,8 @@ sub map {
   my ($self, $request, $adapter) = @_;
   my $session_id = $self->get_session_id_from_hit($request, $adapter);
 
+  $self->{sessions_last_access}->{$session_id} = time;
+
   alias my $request_queue = $self->{sessions}->{$session_id};
   STDERR->print("    Session: count " . (scalar keys %{$self->{sessions}}) . "\n");
 
@@ -216,6 +219,26 @@ sub map {
 
   return $request;
 
+}
+
+sub reap {
+    my $self = shift;
+    my $age = shift or die "pass reap a number of seconds";
+    alias my %sessions = %{ $self->{sessions} };
+    alias my %sessions_last_access = %{ $self->{sessions_last_access} };
+    for my $session_id (keys %sessions) {
+        next if time()-$age > $sessions_last_access{$session_id};
+        warn "$session_id dies";
+        my $request = do {
+            package Continuity::Request::Death;
+            use base 'Continuity::Request';
+            sub immediate { Coro::terminate(0); }
+            bless { }, __PACKAGE__;
+        };
+        $self->exec_cont($request, $sessions{$session_id});
+        delete $sessions{$session_id};
+        delete $sessions_last_access{$session_id};
+    }
 }
 
 sub server :lvalue { $_[0]->{server} }

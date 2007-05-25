@@ -28,7 +28,8 @@ Continuity's guts, we have:
 sub new {
     my $class = shift;
     my %args = @_;
-    exists $args{$_} or warn "new_requestHolder wants $_ as a parameter" for qw/request_queue session_id/;
+    exists $args{$_} or warn "new_requestHolder wants $_ as a parameter"
+        for qw/request_queue session_id/;
     $args{request} = undef;
     STDERR->print("  ReqHolder: created, session_id: $args{session_id}\n");
     bless \%args, $class;
@@ -43,14 +44,14 @@ sub next {
     # If we still have an open request, close it
     $self->request->end_request() if $self->request;
 
+    $self->{headers_sent} = 0;
+
     # Here is where we actually wait for the next request
     $self->request = $self->request_queue->get;
 
     if($self->request->immediate) {
         goto go_again;
     }
-  
-    $self->request->send_basic_header();
 
     print STDERR "-----------------------------\n";
 
@@ -64,14 +65,17 @@ sub param {
 
 sub print {
     my $self = shift; 
-    goto big_print if length $_[0] > 4096; # trying to fix some bug that truncates output... 
-    return $self->request->print(@_);
-    big_print:
-    while(@_) {
-        my $x = shift;
-        $self->request->print(substr $x, 0, 4096, '') while length $x > 4096;
-        $self->request->print($x);
+    if(!$self->{headers_sent}) {
+      $self->request->send_basic_header();
+      $self->{headers_sent} = 1;
     }
+    return $self->{request}->print(@_);
+}
+
+sub send_headers {
+    my $self = shift; 
+    $self->{headers_sent} = 1;
+    return $self->{request}->print(@_);
 }
 
 # This holds our current request

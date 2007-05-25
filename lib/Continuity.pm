@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.92';
+our $VERSION = '0.93';
 
 =head1 NAME
 
@@ -18,9 +18,8 @@ Continuity - Abstract away statelessness of HTTP using continuations, for statef
 
   sub main {
     my $request = shift;
-    $request->next; # Get the first actual request
     $request->print("Your name: <form><input type=text name=name></form>");
-    $request->next;
+    $request->next; # this waits for the form to be submitted!
     my $name = $request->param('name');
     $request->print("Hello $name!");
   }
@@ -170,7 +169,9 @@ or if user-supplied instances are provided, it wires those together.
 
 Arguments:
 
-=over 1
+=over
+
+=item C<callback> -- coderef of the main application to run persistantly for each unique visitor -- defaults to C<\&::main>
 
 =item C<adapter> -- defaults to an instance of C<Continuity::Adapt::HttpDaemon>
 
@@ -178,9 +179,7 @@ Arguments:
 
 =item C<docroot> -- defaults to C<.>
 
-=item C<callback> -- defaults to C<\&::main>
-
-=item C<staticp> -- defaults to C<< sub { 0 } >>, used to indicate whether any request is for static content
+=item C<staticp> -- defaults to C<< sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ } >>, used to indicate whether any request is for static content
 
 =item C<debug> -- defaults to C<4> at the moment ;)
 
@@ -188,21 +187,27 @@ Arguments:
 
 Arguments passed to the default adaptor:
 
-=over 1
+=over
 
 =item C<port> -- the port on which to listen
+
+=item C<no_content_type> -- defaults to 0, set to 1 to disable the C<Content-Type: text/html> header and similar headers
 
 =back
 
 Arguments passed to the default mapper:
 
-=over 1
+=over
 
-=item C<cookie_session> -- set to name of cookie or undef for no cookies
+=item C<cookie_session> -- set to name of cookie or undef for no cookies (defaults to undef)
 
-=item C<ip_session> -- set to true to use ip-addresses for session tracking
+=item C<assign_session_id> -- coderef of routine to custom generate session id numbers (defaults to a simple random string generator)
 
-=item C<path_session> -- set to true to use URL path for session tracking
+=item C<ip_session> -- set to true to enable ip-addresses for session tracking (defaults to false)
+
+=item C<path_session> -- set to true to use URL path for session tracking (defaults to false)
+
+=item C<implicit_first_next> -- set to false to get an empty first request to the main callback (defaults to true)
 
 =back
 
@@ -220,7 +225,7 @@ sub new {
     debug => 4, # XXX
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
-    staticp => sub { $_[0]->url->path =~ m/\.(jpg|gif|png|css|ico|js)$/ },
+    staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
     no_content_type => 0,
     @_,  
   }, $class;
@@ -257,7 +262,8 @@ sub new {
 
     my %optional;
     $optional{LocalPort} = $self->{port} if defined $self->{port};
-    for(qw/ip_session path_session query_session cookie_session assign_session_id/) {
+    for(qw/ip_session path_session query_session cookie_session assign_session_id 
+           implicit_first_next/) {
         # be careful to pass 0 too if the user specified 0 to turn it off
         $optional{$_} = $self->{$_} if defined $self->{$_}; 
     }
@@ -290,9 +296,12 @@ sub new {
          next;
       }
   
-      # Send the basic headers all the time
-      # Don't think the can method will work with the AUTOLOAD trick and wrapper
-      # $r->send_basic_header;
+      # We need some way to decide if we should send static or dynamic
+      # content.
+      # To save users from having to re-implement (likely incorrecty)
+      # basic security checks like .. abuse in GET paths, we should provide
+      # a default implementation -- preferably one already on CPAN.
+      # Here's a way: ask the mapper.
   
       if($self->{staticp}->($r)) {
           $self->debug(3, "Sending static content... ");
@@ -301,12 +310,6 @@ sub new {
           next;
       }
 
-      # We need some way to decide if we should send static or dynamic
-      # content.
-      # To save users from having to re-implement (likely incorrecty)
-      # basic security checks like .. abuse in GET paths, we should provide
-      # a default implementation -- preferably one already on CPAN.
-      # Here's a way: ask the mapper.
       # Right now, map takes one of our Continuity::RequestHolder objects (with conn and request set) and sets queue
 
       # This actually finds the thing that wants it, and gives it to it
@@ -320,7 +323,6 @@ sub new {
     STDERR->print("Done processing request, waiting for next\n");
     
   };
-  #cede;
 
   return $self;
 }
@@ -331,15 +333,26 @@ Calls Coro::Event::loop (through exportation). This never returns!
 
 =cut
 
+no warnings;
 sub loop {
   my ($self) = @_;
+
+  # Coro::Event is insane and wants us to have at least one event... or something
+  async {
+     my $timer = Coro::Event->timer(after => 1, interval => 60, hard => 1);
+     while ($timer->next) {
+        #print STDERR ".";
+     }
+  };
 
   # XXX passing $self is completely invalid. loop is supposed to take a timeout
   # as the parameter, but by passing self it creates a semi-valid timeout.
   # Without this, with the current Coro and Event, it doesn't work.
-  Coro::Event::loop($self);
-  #Coro::Event::loop();
+  cede;
+  #Coro::Event::loop($self);
+  Coro::Event::loop();
 }
+use warnings; # XXX -- while in devolopment
 
 sub debug {
   my ($self, $level, $msg) = @_;
