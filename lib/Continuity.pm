@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.93';
+our $VERSION = '0.94';
 
 =head1 NAME
 
@@ -26,7 +26,7 @@ Continuity - Abstract away statelessness of HTTP using continuations, for statef
 
 =head1 DESCRIPTION
 
-This is ALPHA software, and feedback/code is welcomed.
+This is BETA software, and feedback/code is welcomed.
 
 Continuity is a library to simplify web applications. Each session is written
 and runs as a persistant application, and is able to request additional input
@@ -37,10 +37,10 @@ each new request.
 The program is passed a $request variable which holds the request (including
 any form data) sent from the browser. In concept, this is a lot like a C<$cgi>
 object from CGI.pm with one very very significant difference. At any point in
-the code you can call $request->next. Your program will then block, waiting for
-the next request in the session. Since the program doesn't actually halt, all
-state is preserved, including lexicals -- similar to doing C<$line=E<lt>E<gt>>
-in a command-line application.
+the code you can call $request->next. Your program will then suspend, waiting
+for the next request in the session. Since the program doesn't actually halt,
+all state is preserved, including lexicals -- getting input from the browser is
+then similar to doing C<$line=E<lt>E<gt>> in a command-line application.
 
 =head1 GETTING STARTED
 
@@ -139,7 +139,7 @@ important components which you can extend or replace.
 
 The Adaptor, such as the default L<Continuity::Adapt::HttpDaemon>, actually
 makes the HTTP connections with the client web broswer. If you want to use
-FastCGI or even a non-HTTP protocol, then you will create an adaptor.
+FastCGI or even a non-HTTP protocol, then you will use or create an adaptor.
 
 The Mapper, such as the default L<Continuity::Mapper>, identifies incoming
 requests from The Adaptor and maps them to instances of your program. In other
@@ -199,7 +199,9 @@ Arguments passed to the default mapper:
 
 =over
 
-=item C<cookie_session> -- set to name of cookie or undef for no cookies (defaults to undef)
+=item C<cookie_session> -- set to name of cookie or undef for no cookies (defaults to 'cid')
+
+=item C<query_session> -- set to the name of a query variable for session tracking (defaults to undef)
 
 =item C<assign_session_id> -- coderef of routine to custom generate session id numbers (defaults to a simple random string generator)
 
@@ -227,6 +229,7 @@ sub new {
     callback => (exists &::main ? \&::main : undef),
     staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
     no_content_type => 0,
+    reap_after => undef,
     @_,  
   }, $class;
 
@@ -329,19 +332,23 @@ sub new {
 
 =head2 C<< $server->loop() >>
 
-Calls Coro::Event::loop (through exportation). This never returns!
+Calls Coro::Event::loop and sets up session reaping. This never returns!
 
 =cut
 
-no warnings;
+no warnings 'redefine';
+
 sub loop {
   my ($self) = @_;
 
   # Coro::Event is insane and wants us to have at least one event... or something
   async {
-     my $timer = Coro::Event->timer(after => 1, interval => 60, hard => 1);
+     my $timeout = 300;  
+     $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
+     my $timer = Coro::Event->timer(interval => $timeout, );
      while ($timer->next) {
-        #print STDERR ".";
+STDERR->print("debug: loop calling reap\n");
+        $self->mapper->reap($self->{reap_after}) if $self->{reap_after};
      }
   };
 
@@ -349,10 +356,8 @@ sub loop {
   # as the parameter, but by passing self it creates a semi-valid timeout.
   # Without this, with the current Coro and Event, it doesn't work.
   cede;
-  #Coro::Event::loop($self);
   Coro::Event::loop();
 }
-use warnings; # XXX -- while in devolopment
 
 sub debug {
   my ($self, $level, $msg) = @_;

@@ -223,9 +223,6 @@ sub debug {
 
 package Continuity::Adapt::HttpDaemon::Request;
 
-use strict;
-use vars qw( $AUTOLOAD );
-
 =for comment
 
 See L<Continuity::Request> for API documentation.
@@ -345,6 +342,12 @@ sub print {
 
 sub uri { $_[0]->{http_request}->uri(); }
 
+sub method { $_[0]->{http_request}->method(); }
+
+#
+# end public Continuity::Request API methods
+#
+
 # sub query_string { $_[0]->{http_request}->query_string(); } # nope, doesn't exist in HTTP::Headers
 
 sub immediate { }
@@ -356,6 +359,7 @@ sub http_request :lvalue { $_[0]->{http_request} } # private
 # If we don't know how to do something, pass it on to the current http_request
 
 sub AUTOLOAD {
+  our $AUTOLOAD;
   my $method = $AUTOLOAD; $method =~ s/.*:://;
   return if $method eq 'DESTROY';
   #print STDERR "Request AUTOLOAD: $method ( @_ )\n";

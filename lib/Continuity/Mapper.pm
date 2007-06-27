@@ -4,7 +4,6 @@ package Continuity::Mapper;
 use strict;
 use warnings; # XXX -- development only
 use CGI;
-use Data::Alias;
 use Coro;
 use Coro::Channel;
 
@@ -17,10 +16,10 @@ Continuity::Mapper - Map a request onto a session
 =head1 DESCRIPTION
 
 This is the session dictionary and mapper. Given an HTTP request, mapper gives
-said request to the correct session. Mapper makes sessions as needed and stores
-them. Mapper may be subclassed to implement other strategies for associating
-requests with continuations. The default strategy is (in limbo but quite
-possibily) based on client IP address plus URL.
+said request to the correct continuation. Mapper makes continuations as needed
+and stores them. Mapper may be subclassed to implement other strategies for
+associating requests with continuations. The default strategy is (in limbo but
+quite possibily) based on a cookie.
 
 =head1 METHODS
 
@@ -37,10 +36,10 @@ L<Contuinity> does the following by default:
 
 L<Continuity::Mapper> fills in the following defaults:
 
-    ip_session => 1,
-    path_session => 0,
     cookie_session => 'sid',
-    query_session => 'sid',
+    ip_session => 0,
+    path_session => 0,
+    query_session => 0,
     assign_session_id => sub { join '', map int rand 10, 1..20 },
 
 Only C<cookie_session> or C<query_session> should be set, but not both.
@@ -50,11 +49,10 @@ in this example) is passed.
 C<assign_session_id> likewise gets called when C<query_session> is set but
 no GET/POST parameter of the specified name (C<sid> in this example) is
 passed.
-Use of C<query_session> is not recommended as to keep the user associated 
+
+If you use C<query_session> to keep the user associated 
 with their session, every link and form in the application must be written to
-include the session id.
-XXX todo: how the user can find out what assign_session_id came up for
-the current user to pass this value back to itself.
+include the session id. The currently assigned ID can be gotten at with C<$request->session_id>.
 
 For each incoming HTTP hit, L<Continuity> must use some criteria for 
 deciding which execution context to send that hit to.
@@ -136,7 +134,6 @@ subset of the functionality.
 
 sub get_session_id_from_hit {
   my ($self, $request) = @_;
-  alias my $hit_to_session_id = $self->{hit_to_session_id};
   my $session_id = '';
   my $sid;
   STDERR->print("        URI: ", $request->uri, "\n");
@@ -167,7 +164,7 @@ sub get_session_id_from_hit {
     # use Data::Dumper 'Dumper'; STDERR->print("request->headers->header(Cookie): ", Dumper($request->headers->header('Cookie')));
     (my $cookie) =  map $_->[1], grep $_->[0] eq $self->{cookie_session}, map [ m/(.*?)=(.*)/ ], split /; */, $request->headers->header('Cookie') || '';
     $sid = $cookie if $cookie;
-    STDERR->print("    Session: got cookie '$sid'\n");
+    STDERR->print("    Session: got cookie '$sid'\n") if $sid;
   }
 
   if(($self->{query_session} or $self->{cookie_session}) and ! $sid) {
@@ -177,7 +174,7 @@ sub get_session_id_from_hit {
       STDERR->print("    New SID: $sid\n");
   }
 
-  $session_id .= '.' . $sid if $sid;
+  $session_id .= $sid if $sid;
 
   STDERR->print(" Session ID: ", $session_id, "\n");
 
@@ -205,15 +202,14 @@ sub map {
 
   $self->{sessions_last_access}->{$session_id} = time;
 
-  alias my $request_queue = $self->{sessions}->{$session_id};
   STDERR->print("    Session: count " . (scalar keys %{$self->{sessions}}) . "\n");
 
-  if(! $request_queue) {
-    print STDERR
-    "    Session: No request queue for this session ($session_id), making a new one.\n";
-    $request_queue = $self->new_request_queue($session_id);
-    # Don't need to stick it back into $self->{sessions} because of the alias
+  if( ! $self->{sessions}->{$session_id} ) {
+      STDERR->print("    Session: No request queue for this session ($session_id), making a new one.\n");
+      $self->{sessions}->{$session_id} = $self->new_request_queue($session_id);
   }
+
+  my $request_queue = $self->{sessions}->{$session_id};
 
   $self->exec_cont($request, $request_queue);
 
@@ -224,10 +220,10 @@ sub map {
 sub reap {
     my $self = shift;
     my $age = shift or die "pass reap a number of seconds";
-    alias my %sessions = %{ $self->{sessions} };
-    alias my %sessions_last_access = %{ $self->{sessions_last_access} };
-    for my $session_id (keys %sessions) {
-        next if time()-$age > $sessions_last_access{$session_id};
+    my $sessions = $self->{sessions};
+    my $sessions_last_access = $self->{sessions_last_access};
+    for my $session_id (keys %$sessions ) {
+        next if $sessions_last_access->{$session_id} + $age > time;
         warn "$session_id dies";
         my $request = do {
             package Continuity::Request::Death;
@@ -235,9 +231,9 @@ sub reap {
             sub immediate { Coro::terminate(0); }
             bless { }, __PACKAGE__;
         };
-        $self->exec_cont($request, $sessions{$session_id});
-        delete $sessions{$session_id};
-        delete $sessions_last_access{$session_id};
+        $self->exec_cont($request, $sessions->{$session_id});
+        delete $sessions->{$session_id};
+        delete $sessions_last_access->{$session_id};
     }
 }
 
