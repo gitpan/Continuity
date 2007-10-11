@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.94';
+our $VERSION = '0.95';
 
 =head1 NAME
 
@@ -45,7 +45,7 @@ then similar to doing C<$line=E<lt>E<gt>> in a command-line application.
 =head1 GETTING STARTED
 
 First, check out the small demo applications in the eg/ directory of the
-distribution. Sample code there rages from simple counters to more complex
+distribution. Sample code there ranges from simple counters to more complex
 multi-user ajax applications.
 
 Declare all your globals, then declare and create your server. Parameters to
@@ -75,7 +75,7 @@ in CGI.pm applications.
   $request->print("'ow ya been?");
 
 HTTP query parameters (both GET and POST) are also gotten through the
-C<$request> handle, by calling C<$p = $request-E<gt>param('p')>.
+C<$request> handle, by calling C<$p = $request-E<gt>param('p')>, like in C<CGI>.
 
   # If they go to http://webapp/?x=7
   my $input = $request->param('x');
@@ -150,6 +150,11 @@ alternative session identification and management.
 
 =head1 METHODS
 
+The main instance of a continuity server really only has two methods, C<new>
+and C<loop>. These are used at the top of your program to do setup and start
+the server. Please look at L<Continuity::Request> for documentation on the
+C<$request> object that is passed to each session in your application.
+
 =cut
 
 use strict;
@@ -161,7 +166,10 @@ use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
 use Continuity::RequestHolder;
 
-=head2 C<< $server = Continuity->new(...) >>
+our $_debug_level;
+sub debug_level :lvalue { $_debug_level }         # Debug level (integer)
+
+=head2 $server = Continuity->new(...)
 
 The C<Continuity> object wires together an adapter and a mapper.
 Creating the C<Continuity> object gives you the defaults wired together,
@@ -169,47 +177,47 @@ or if user-supplied instances are provided, it wires those together.
 
 Arguments:
 
-=over
+=over 4
 
-=item C<callback> -- coderef of the main application to run persistantly for each unique visitor -- defaults to C<\&::main>
+=item * C<callback> -- coderef of the main application to run persistantly for each unique visitor -- defaults to C<\&::main>
 
-=item C<adapter> -- defaults to an instance of C<Continuity::Adapt::HttpDaemon>
+=item * C<adapter> -- defaults to an instance of C<Continuity::Adapt::HttpDaemon>
 
-=item C<mapper> -- defaults to an instance of C<Continuity::Mapper>
+=item * C<mapper> -- defaults to an instance of C<Continuity::Mapper>
 
-=item C<docroot> -- defaults to C<.>
+=item * C<docroot> -- defaults to C<.>
 
-=item C<staticp> -- defaults to C<< sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ } >>, used to indicate whether any request is for static content
+=item * C<staticp> -- defaults to C<< sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ } >>, used to indicate whether any request is for static content
 
-=item C<debug> -- defaults to C<4> at the moment ;)
+=item * C<debug_level> -- defaults to C<4> at the moment ;)
 
 =back
 
 Arguments passed to the default adaptor:
 
-=over
+=over 4
 
-=item C<port> -- the port on which to listen
+=item * C<port> -- the port on which to listen
 
-=item C<no_content_type> -- defaults to 0, set to 1 to disable the C<Content-Type: text/html> header and similar headers
+=item * C<no_content_type> -- defaults to 0, set to 1 to disable the C<Content-Type: text/html> header and similar headers
 
 =back
 
 Arguments passed to the default mapper:
 
-=over
+=over 4
 
-=item C<cookie_session> -- set to name of cookie or undef for no cookies (defaults to 'cid')
+=item * C<cookie_session> -- set to name of cookie or undef for no cookies (defaults to 'cid')
 
-=item C<query_session> -- set to the name of a query variable for session tracking (defaults to undef)
+=item * C<query_session> -- set to the name of a query variable for session tracking (defaults to undef)
 
-=item C<assign_session_id> -- coderef of routine to custom generate session id numbers (defaults to a simple random string generator)
+=item * C<assign_session_id> -- coderef of routine to custom generate session id numbers (defaults to a simple random string generator)
 
-=item C<ip_session> -- set to true to enable ip-addresses for session tracking (defaults to false)
+=item * C<ip_session> -- set to true to enable ip-addresses for session tracking (defaults to false)
 
-=item C<path_session> -- set to true to use URL path for session tracking (defaults to false)
+=item * C<path_session> -- set to true to use URL path for session tracking (defaults to false)
 
-=item C<implicit_first_next> -- set to false to get an empty first request to the main callback (defaults to true)
+=item * C<implicit_first_next> -- set to false to get an empty first request to the main callback (defaults to true)
 
 =back
 
@@ -224,7 +232,7 @@ sub new {
     docroot => '.',   # default docroot
     mapper => undef,
     adapter => undef,
-    debug => 4, # XXX
+    debug_level => 4, # XXX
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
     staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
@@ -235,7 +243,8 @@ sub new {
 
   if($self->{reload}) {
     eval "use Module::Reload";
-    $Module::Reload::Debug = 1 if $self->{debug};
+    $self->{reload} = 0 if $@;
+    $Module::Reload::Debug = 1 if $self->debug_level;
   }
 
   # Set up the default adaptor.
@@ -246,7 +255,7 @@ sub new {
     $self->{adaptor} = Continuity::Adapt::HttpDaemon->new(
       docroot => $self->{docroot},
       server => $self,
-      debug => $self->{debug},
+      debug_level => $self->debug_level,
       no_content_type => $self->{no_content_type},
       $self->{port} ? (LocalPort => $self->{port}) : (),
     );
@@ -272,7 +281,7 @@ sub new {
     }
 
     $self->{mapper} = Continuity::Mapper->new(
-      debug => $self->{debug},
+      debug_level => $self->debug_level,
       callback => $self->{callback},
       server => $self,
       %optional,
@@ -330,7 +339,7 @@ sub new {
   return $self;
 }
 
-=head2 C<< $server->loop() >>
+=head2 $server->loop()
 
 Calls Coro::Event::loop and sets up session reaping. This never returns!
 
@@ -347,7 +356,7 @@ sub loop {
      $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
      my $timer = Coro::Event->timer(interval => $timeout, );
      while ($timer->next) {
-STDERR->print("debug: loop calling reap\n");
+        $self->debug(3, "debug: loop calling reap");
         $self->mapper->reap($self->{reap_after}) if $self->{reap_after};
      }
   };
@@ -361,7 +370,7 @@ STDERR->print("debug: loop calling reap\n");
 
 sub debug {
   my ($self, $level, $msg) = @_;
-  if(defined $self->{debug} and $level >= $self->{debug}) {
+  if($self->debug_level and $level >= $self->debug_level) {
     print STDERR "$msg\n";
   }
 }
@@ -370,50 +379,6 @@ sub adaptor :lvalue { $_[0]->{adaptor} }
 
 sub mapper :lvalue { $_[0]->{mapper} }
 
-=head1 Internal Structure
-
-For the curious or the brave, here is an ASCII diagram of how the pieces fit:
-
-  +---------+      +---------+     +--------+                         
-  | Browser | <--> | Adaptor | --> | Mapper |                         
-  +---------+      +---------+     +--------+                         
-                        ^              |                              
-                        |              |                              
-  +---------------------+              |                              
-  |      +-------------------+---------+----------+          
-  |      |                   |                    |              
-  |      V                   V                    V              
-  |    +---------+         +---------+          +---------+         
-  |    | Session |         | Session |          | Session |            
-  |    | Request |         | Request |          | Request |         
-  |    | Queue   |         | Queue   |          | Queue   |         
-  |    |    |    |         |    |    |          |    |    |        
-  |    |    V    |         |    V    |          |    V    |         
-  |    +---------+         +---------+          +---------+          
-  |      |                   |                    |             
-  |      V                   V                    V              
-  |  +-----+   +------+   +-----+   +------+   +-----+   +------+
-  |  | Cur |<->| Your |   | Cur |<->| Your |   | Cur |<->| Your |
-  |  | Req |   | Code |   | Req |   | Code |   | Req |   | Code |
-  |  +-----+   +------+   +-----+   +------+   +-----+   +------+
-  |     |                    |                    |
-  |     V                    V                    V
-  +-----+--------------------+--------------------+
-
-** "Cur Req" == "Current Request"
-
-Basically, the Adaptor accepts requests from the browser, hands them off to the
-Mapper, which then queues them into the correct session queue (or creates a new
-queue).
-
-When Your Code calls "$request->next" the Current Request overwrites itself
-with the next item in the queue (or waits until there is one).
-
-Most of the time you will have pretty empty queues -- they are mostly there for
-safety, in case you have a lot of incoming requests and running sessions.
-
-For further internal development documentation, please see the wiki or email
-me.
 
 =head1 SEE ALSO
 
