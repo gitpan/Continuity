@@ -1,27 +1,17 @@
---- 
-abstract: Abstract away statelessness of HTTP using continuations, for stateful Web applications
-author: Brock Wilcox <awwaiid@thelackthereof.org> - http://thelackthereof.org/
-distribution_type: module
-generated_by: Module::Install version 0.65
-license: perl
-meta-spec: 
-  url: http://module-build.sourceforge.net/META-spec-v1.3.html
-  version: 1.3
-name: Continuity
-no_index: 
-  directory: 
-    - ex
-    - inc
-    - t
-  package: 
-    - HTTP::Daemon
-recommends: 
-  FCGI: 0.67
-  Module::Reload: 1.07
-requires: 
-  AnyEvent: 0
-  Coro: 4.03
-  Event: 0
-  HTTP::Daemon: 1.36
-  IO::AIO: 2.3
-version: 0.95
+--- #YAML:1.0
+name:                Continuity
+version:             0.96
+abstract:            Abstract away statelessness of HTTP, for stateful Web applications
+license:             ~
+author:              
+    - Brock Wilcox <awwaiid@thelackthereof.org>
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
+    Coro:                          3.6
+    Coro::Event:                   2.1
+    HTTP::Daemon:                  1.36
+    Module::Reload:                1.07
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3

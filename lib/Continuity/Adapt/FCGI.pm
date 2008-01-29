@@ -141,6 +141,8 @@ use base 'HTTP::Request';
 use Continuity::Request;
 use base 'Continuity::Request';
 
+sub cached_params :lvalue { $_[0]->{cached_params} }     # CGI query params
+
 =item $request = Continuity::Adapt::FCGI::Request->new($client, $id, $cgi, $query)
 
 Creates a new C<Continuity::Adapt::FCGI::Request> object. This deletes values
@@ -253,13 +255,15 @@ the query data.
 
 sub param {
     my $self = shift; 
-    my @params = @{ $self->{params} ||= do {
+    my $req = $self->http_request;
+    my @params = @{ $self->cached_params ||= do {
+        #my $in = $req->uri; $in .= '&' . $req->content if $req->content;
         my $in = $self->{env}->{QUERY_STRING};
         $in .= '&' . $self->{content} if $self->{content};
         $in .= '&' . $self->content_ref if $self->content_ref;
         $in =~ s{^.*\?}{};
         my @params;
-        for(split/[&]/, $in) {
+        for(split/[&]/, $in) { 
             tr/+/ /; 
             s{%(..)}{pack('c',hex($1))}ge; 
             my($k, $v); ($k, $v) = m/(.*?)=(.*)/s or ($k, $v) = ($_, 1);
@@ -282,13 +286,30 @@ sub param {
         }
         return @values;
     }
-} 
+}
+
+sub params {
+    my $self = shift;
+    $self->param;
+    return @{$self->cached_params};
+}
 
 sub set_cookie {
     my $self = shift;
     my $cookie = shift;
     # record cookies and then send them the next time send_basic_header() is called and a header is sent.
     $self->{cookies} .= "Set-Cookie: $cookie\r\n";
+}
+
+sub get_cookie {
+    my $self = shift;
+    my $cookie_name = shift;
+    my ($cookie) =  map $_->[1],
+      grep $_->[0] eq $cookie_name,
+      map [ m/(.*?)=(.*)/ ],
+      split /; */,
+      $self->headers->header('Cookie') || '';
+    return $cookie;
 }
 
 
@@ -351,7 +372,7 @@ L<Continuity>
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2007 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
+  Copyright (c) 2004-2008 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
   reserved.  This program is free software; you can redistribute it and/or
   modify it under the same terms as Perl itself.
 

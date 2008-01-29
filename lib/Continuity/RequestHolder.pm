@@ -22,8 +22,23 @@ Continuity's guts, we have:
   the second sort of object (eg, C::A::H::Request) from a queue and
   delegates calls most tasks to that object.
 
+We should move as much into here as possible, since it is used by all the
+different Adaptors.
 
 =cut
+
+# Accessors
+
+# This holds our current request
+sub request :lvalue { $_[0]->{request} }
+
+# Our queue of incoming requests
+sub request_queue :lvalue { $_[0]->{request_queue} }
+
+# Used by the mapper to identify the whole queue
+sub session_id :lvalue { $_[0]->{session_id} }
+
+sub debug_level :lvalue { $_[0]->{debug_level} }         # Debug level (integer)
 
 sub new {
     my $class = shift;
@@ -31,8 +46,10 @@ sub new {
     exists $args{$_} or warn "new_requestHolder wants $_ as a parameter"
         for qw/request_queue session_id/;
     $args{request} = undef;
-    STDERR->print("  ReqHolder: created, session_id: $args{session_id}\n");
-    bless \%args, $class;
+    my $self = { %args };
+    bless $self, $class;
+    $self->Continuity::debug(2,"  ReqHolder: created, session_id: $args{session_id}");
+    bless $self;
 }
 
 sub next {
@@ -53,14 +70,9 @@ sub next {
         goto go_again;
     }
 
-    print STDERR "-----------------------------\n";
+    $self->Continuity::debug(2,"-----------------------------");
 
     return $self;
-}
-
-sub param {
-    my $self = shift;
-    $self->request->param(@_);    
 }
 
 sub print {
@@ -69,39 +81,32 @@ sub print {
       $self->request->send_basic_header();
       $self->{headers_sent} = 1;
     }
-    return $self->{request}->print(@_);
+    return $self->request->print(@_);
 }
 
 sub send_headers {
     my $self = shift; 
     $self->{headers_sent} = 1;
-    return $self->{request}->print(@_);
+    return $self->request->print(@_);
 }
-
-# This holds our current request
-sub request :lvalue { $_[0]->{request} }
-
-# Our queue of incoming requests
-sub request_queue :lvalue { $_[0]->{request_queue} }
-
-# Our session_id -- this is used by the mapper to identify the whole queue
-sub session_id :lvalue { $_[0]->{session_id} }
 
 # If we don't know how to do something, pass it on to the current continuity_request
 
 sub AUTOLOAD {
+  # XXX always does scalar context... should do list/sclar as appropriate
   my $method = $AUTOLOAD; $method =~ s/.*:://;
   return if $method eq 'DESTROY';
-  STDERR->print("RequestHolder AUTOLOAD: method: ``$method'' ( @_ )\n");
+  # STDERR->print("RequestHolder AUTOLOAD: method: ``$method'' ( @_ )\n");
   my $self = shift;
-  my $retval = eval { 
-      $self->{request}->can($method) or die "request object doesn't implemented requested method\n"; 
-      $self->{request}->can($method)->($self->{request}, @_); 
+  my (@retval) = eval { 
+    $self->request->can($method)
+      or die "request object doesn't implemented requested method\n"; 
+    $self->request->can($method)->($self->request, @_); 
   };
   if($@) {
-    warn "Continuity::::RequestHolder::AUTOLOAD: Error delegating method ``$method'': $@";
+    warn "Continuity::RequestHolder::AUTOLOAD: Error delegating method ``$method'': $@";
   }
-  return $retval;
+  return wantarray ? @retval : $retval[0];
 }
 
 1;

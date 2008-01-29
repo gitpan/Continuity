@@ -1,10 +1,10 @@
 package Continuity;
 
-our $VERSION = '0.95';
+our $VERSION = '0.96';
 
 =head1 NAME
 
-Continuity - Abstract away statelessness of HTTP using continuations, for stateful Web applications
+Continuity - Abstract away statelessness of HTTP, for stateful Web applications
 
 =head1 SYNOPSIS
 
@@ -213,6 +213,8 @@ Arguments passed to the default mapper:
 
 =item * C<assign_session_id> -- coderef of routine to custom generate session id numbers (defaults to a simple random string generator)
 
+=item * C<cookie_life> -- lifespan of the cookie, as in CGI::set_cookie (defaults to "+2d")
+
 =item * C<ip_session> -- set to true to enable ip-addresses for session tracking (defaults to false)
 
 =item * C<path_session> -- set to true to use URL path for session tracking (defaults to false)
@@ -232,7 +234,7 @@ sub new {
     docroot => '.',   # default docroot
     mapper => undef,
     adapter => undef,
-    debug_level => 4, # XXX
+    debug_level => 0, # XXX
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
     staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
@@ -258,6 +260,7 @@ sub new {
       debug_level => $self->debug_level,
       no_content_type => $self->{no_content_type},
       $self->{port} ? (LocalPort => $self->{port}) : (),
+      $self->{cookie_life} ? (cookie_life => $self->{cookie_life}) : (), 
     );
   } elsif(! ref $self->{adaptor}) {
     die "Not a ref, $self->{adaptor}\n";
@@ -332,7 +335,7 @@ sub new {
 
     }
   
-    STDERR->print("Done processing request, waiting for next\n");
+    $self->debug(2, "Done processing request, waiting for next\n");
     
   };
 
@@ -398,7 +401,7 @@ L<Continuity::Adapt::HttpDaemon>, L<Coro>
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2007 Brock Wilcox <awwaiid@thelackthereof.org>. All
+  Copyright (c) 2004-2008 Brock Wilcox <awwaiid@thelackthereof.org>. All
   rights reserved.  This program is free software; you can redistribute it
   and/or modify it under the same terms as Perl itself.
 
