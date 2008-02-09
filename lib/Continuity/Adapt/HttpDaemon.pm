@@ -33,12 +33,12 @@ Continuity::Adapt::HttpDaemon::Request - an HTTP::Daemon based request
 
 =head1 DESCRIPTION
 
-This is the default and reference HTTP adaptor for L<Continuity>. The only
+This is the default and reference HTTP adapter for L<Continuity>. The only
 thing a normal user of Continuity would want to do with this is in the C<< new
 >> method, all the rest is for internal use. See L<Continuity::Request> for the
 general request API used by an application.
 
-An adaptor interfaces between the continuation server (L<Continuity>) and the
+An adapter interfaces between the continuation server (L<Continuity>) and the
 web server (HTTP::Daemon, FastCGI, etc). It provides incoming HTTP requests to
 the continuation server. It comes in two parts, the server connector and the
 request interface.
@@ -51,7 +51,7 @@ This module was designed to be subclassed to fine-tune behavior.
 
 =head2 C<< $adapter = Continuity::Adapt::HttpDaemon->new(...) >>
 
-Create a new continuation adaptor and HTTP::Daemon. This actually starts the
+Create a new continuation adapter and HTTP::Daemon. This actually starts the
 HTTP server, which is embeded. It takes the same arguments as the
 L<HTTP::Daemon> module, and those arguments are passed along.  It also takes
 the optional argument C<< docroot => '/path' >>. This adapter may then be
@@ -59,7 +59,7 @@ specified for use with the following code:
 
   my $server = Contuinity->new(adapter => $adapter);
 
-This method is required for all adaptors.
+This method is required for all adapters.
 
 =cut
 
@@ -72,6 +72,7 @@ sub new {
     server => delete $args{server},
     no_content_type => delete $args{no_content_type},
     cookies => '',
+    debug_level => delete $args{debug_level},
   }, $class;
 
   # Set up our http daemon
@@ -82,12 +83,12 @@ sub new {
 
   $self->docroot = Cwd::getcwd() if $self->docroot eq '.' or $self->docroot eq './';
 
-  STDERR->print("Please contact me at: ", $self->daemon->url, "\n");
+  $self->Continuity::debug(1, "Please contact me at: " . $self->daemon->url);
 
   return $self;
 }
 
-=head2 C<< $adaptor->get_request() >>
+=head2 C<< $adapter->get_request() >>
 
 Map a URL path to a filesystem path
 
@@ -96,14 +97,14 @@ Called in a loop from L<Contuinity>.
 Returns the empty list on failure, which aborts the server process.
 Aside from the constructor, this is the heart of this module.
 
-This method is required for all adaptors.
+This method is required for all adapters.
 
 =cut
 
 sub get_request {
   my ($self) = @_;
 
-  # $self->debug(2,__FILE__, ' ', __LINE__, "\n");
+  # $self->Continuity::debug(2,__FILE__, ' ', __LINE__, "\n");
   while(1) {
     my $c = $self->daemon->accept or next;
     my $r = $c->get_request or next;
@@ -136,12 +137,12 @@ sub map_path {
 
   # if($path =~ m%^/?\.\.(?=/|$)%) then bad
 
-$self->debug(2,"path: $docroot$path\n");
+$self->Continuity::debug(2,"path: $docroot$path\n");
 
   return "$docroot$path";
 }
 
-=head2 C<< $adaptor->send_static($request) >>
+=head2 C<< $adapter->send_static($request) >>
 
 Sends a static file off of the filesystem. The content-type is guessed by
 HTTP::Daemon, plus we specifically tell it how to do png, css, and js.
@@ -165,22 +166,15 @@ sub send_static {
   my $url = $r->url;
   $url =~ s{\?.*}{};
   my $path = $self->map_path($url) or do { 
-       $self->debug(1, "can't map path: " . $url); $c->send_error(404); return; 
+       $self->Continuity::debug(1, "can't map path: " . $url); $c->send_error(404); return; 
   };
   unless (-f $path) {
       $c->send_error(404);
       return;
   }
   $c->send_file_response($path);
-  $self->debug(3, "Static send '$path'");
+  $self->Continuity::debug(3, "Static send '$path'");
 }
-
-sub debug {
-  my ($self, $level, $msg) = @_;
-  if(defined $self->debug_level and $level >= $self->debug_level) {
-    $self->debug(2,"$msg\n"); 
-  } 
-} 
 
 package Continuity::Adapt::HttpDaemon::Request;
 
@@ -192,13 +186,6 @@ sub write_event :lvalue { $_[0]->{write_event} }   # Watch for writes to the con
 sub no_content_type :lvalue { $_[0]->{no_content_type} } # Flag, never send type
 sub cached_params :lvalue { $_[0]->{cached_params} }     # CGI query params
 sub debug_level :lvalue { $_[0]->{debug_level} }
-
-sub debug {
-  my ($self, $level, $msg) = @_;
-  if(defined $self->debug_level and $level >= $self->debug_level) {
-    $self->debug(2,"$msg\n"); 
-  } 
-} 
 
 =for comment
 
@@ -231,7 +218,7 @@ sub new {
     my $self = bless { @_ }, $class;
     eval { $self->conn->isa('HTTP::Daemon::ClientConn') } or warn "\$self->conn isn't an HTTP::Daemon::ClientConn";
     eval { $self->http_request->isa('HTTP::Request') } or warn "\$self->http_request isn't an HTTP::Request";
-    $self->debug(2, "\n====== Got new request ======\n"
+    $self->Continuity::debug(2, "\n====== Got new request ======\n"
                . "       Conn: ".$self->conn."\n"
                . "    Request: $self"
     );
@@ -353,7 +340,6 @@ sub AUTOLOAD {
   our $AUTOLOAD;
   my $method = $AUTOLOAD; $method =~ s/.*:://;
   return if $method eq 'DESTROY';
-  #print STDERR "Request AUTOLOAD: $method ( @_ )\n";
   my $self = shift;
   my $retval;
   if({peerhost=>1,send_basic_header=>1,'print'=>1,'send_redirect'=>1}->{$method}) {

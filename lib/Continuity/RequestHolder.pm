@@ -59,7 +59,10 @@ sub next {
     go_again:
 
     # If we still have an open request, close it
-    $self->request->end_request() if $self->request;
+    if($self->request) {
+      $self->Continuity::debug(2,"Closing old req: " . $self->request);
+      $self->request->end_request;
+    }
 
     $self->{headers_sent} = 0;
 
@@ -96,7 +99,6 @@ sub AUTOLOAD {
   # XXX always does scalar context... should do list/sclar as appropriate
   my $method = $AUTOLOAD; $method =~ s/.*:://;
   return if $method eq 'DESTROY';
-  # STDERR->print("RequestHolder AUTOLOAD: method: ``$method'' ( @_ )\n");
   my $self = shift;
   my (@retval) = eval { 
     $self->request->can($method)
@@ -104,7 +106,7 @@ sub AUTOLOAD {
     $self->request->can($method)->($self->request, @_); 
   };
   if($@) {
-    warn "Continuity::RequestHolder::AUTOLOAD: Error delegating method ``$method'': $@";
+    $self->Continuity::debug(1, "Continuity::RequestHolder::AUTOLOAD: Error delegating method ``$method'': $@");
   }
   return wantarray ? @retval : $retval[0];
 }

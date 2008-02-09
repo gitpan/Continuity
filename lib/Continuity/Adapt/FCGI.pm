@@ -10,6 +10,8 @@ use HTTP::Status;
 use Continuity::RequestHolder;
 use IO::Handle;
 
+sub debug_level :lvalue { $_[0]->{debug_level} }
+
 =head1 NAME
 
 Continuity::Adapt::FCGI - Use HTTP::Daemon as a continuation server
@@ -25,7 +27,7 @@ objects that are sent to applications running inside Continuity.
 
 =item $server = new Continuity::Adapt::FCGI(...)
 
-Create a new continuation adaptor and HTTP::Daemon. This actually starts the
+Create a new continuation adapter and HTTP::Daemon. This actually starts the
 HTTP server which is embeded.
 
 =cut
@@ -50,12 +52,6 @@ sub new {
 
   return $self;
 }
-
-#sub new_requestHolder {
-#  my ($self, @ops) = @_;
-#  my $holder = Continuity::RequestHolder->new( @ops );
-#  return $holder;
-#}
 
 =item mapPath($path) - map a URL path to a filesystem path
 
@@ -88,7 +84,7 @@ sub send_static {
   my ($self, $r) = @_;
   my $c = $r->conn or die;
   my $path = $self->map_path($r->url->path) or do { 
-       $self->debug(1, "can't map path: " . $r->url->path); $c->send_error(404); return; 
+       $self->Continuity::debug(1, "can't map path: " . $r->url->path); $c->send_error(404); return; 
   };
   $path =~ s{^/}{}g;
   unless (-f $path) {
@@ -106,7 +102,7 @@ sub send_static {
   while(read $file, my $buf, 8192) {
       $c->print($buf);
   } 
-  print STDERR "Static send '$path', Content-type: $mimetype\n";
+  $self->Continuity::debug(2,"Static send '$path', Content-type: $mimetype");
 }
 
 sub get_request {
@@ -114,11 +110,13 @@ sub get_request {
   my $r = $self->{fcgi_request};
   #$SIG{__WARN__} = sub { print STDERR @_ };
   #$SIG{__DIE__} = sub { print STDERR @_ };
-  if($r->Accept() >= 0) {
+  if($r->Accept >= 0) {
+    $self->Continuity::debug(2,"FCGI request accepted, request: $r");
     return Continuity::Adapt::FCGI::Request->new(
       fcgi_request => $r,
     );
   }
+  die "Continuity::Adapt::FCGI: ERROR: Not in FCGI environment?\n";
   return undef;
 }
 
@@ -142,6 +140,8 @@ use Continuity::Request;
 use base 'Continuity::Request';
 
 sub cached_params :lvalue { $_[0]->{cached_params} }     # CGI query params
+sub debug_level :lvalue { $_[0]->{debug_level} }
+sub fcgi_request :lvalue { $_[0]->{http_request} } # The HTTP::Request object
 
 =item $request = Continuity::Adapt::FCGI::Request->new($client, $id, $cgi, $query)
 
@@ -159,7 +159,6 @@ sub new {
   my $fcgi_request = $args{fcgi_request};
   my $cgi = $fcgi_request->GetEnvironment;
   my ($in, $out, $err) = $fcgi_request->GetHandles;
-  #$self->{out} = $out;
   my $content;
   {
     local $/;
@@ -183,13 +182,14 @@ sub new {
      ),
      $content
   );
-  $self->{fcgi_request} = $fcgi_request;
+  $self->fcgi_request = $fcgi_request;
   $self->{out} = $out;
-  $self->{env} = $fcgi_request->GetEnvironment;
+  $self->{env} = $cgi;
   $self->{content} = $content;
-  STDERR->print( "\n====== Got new request ======\n"
-             . "       Conn: $self->{out}\n"
-             . "    Request: $self\n"
+  $self->{debug_level} = $args{debug_level};
+  $self->Continuity::debug(2, "\n====== Got new request ======\n"
+             . "       Conn: ".$self->{out}."\n"
+             . "    Request: $self"
   );
   return $self;
 }
@@ -255,12 +255,9 @@ the query data.
 
 sub param {
     my $self = shift; 
-    my $req = $self->http_request;
     my @params = @{ $self->cached_params ||= do {
-        #my $in = $req->uri; $in .= '&' . $req->content if $req->content;
         my $in = $self->{env}->{QUERY_STRING};
         $in .= '&' . $self->{content} if $self->{content};
-        $in .= '&' . $self->content_ref if $self->content_ref;
         $in =~ s{^.*\?}{};
         my @params;
         for(split/[&]/, $in) { 
@@ -327,19 +324,8 @@ sub _parse {
 sub conn :lvalue { $_[0]->{out} }
 
 sub end_request {
-  $_[0]->{fcgi_request}->Finish;
+  $_[0]->fcgi_request->Finish if $_[0]->fcgi_request;
 }
-
-=for comment
-
-sub send_basic_header {
-    # Called unconditionally from C::RequestHolder
-    # FCGI apparently has done this already (perhaps elsewhere in the module?), so we don't need to do anything here
-    # (unlike in C::A::H::Request, which does do something in this event)
-    1;
-}
-
-=cut
 
 sub send_basic_header {
     my $self = shift;

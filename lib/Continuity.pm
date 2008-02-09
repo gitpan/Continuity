@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.96';
+our $VERSION = '0.97';
 
 =head1 NAME
 
@@ -137,12 +137,12 @@ shouldn't even be talking about this.
 This library is designed to be extensible but have good defaults. There are two
 important components which you can extend or replace.
 
-The Adaptor, such as the default L<Continuity::Adapt::HttpDaemon>, actually
+The Adapter, such as the default L<Continuity::Adapt::HttpDaemon>, actually
 makes the HTTP connections with the client web broswer. If you want to use
-FastCGI or even a non-HTTP protocol, then you will use or create an adaptor.
+FastCGI or even a non-HTTP protocol, then you will use or create an Adapter.
 
 The Mapper, such as the default L<Continuity::Mapper>, identifies incoming
-requests from The Adaptor and maps them to instances of your program. In other
+requests from The Adapter and maps them to instances of your program. In other
 words, Mappers keep track of sessions, figuring out which requests belong to
 which session. The default mapper can identify sessions based on any
 combination of cookie, ip address, and URL path. Override The Mapper to create
@@ -166,12 +166,14 @@ use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
 use Continuity::RequestHolder;
 
-our $_debug_level;
-sub debug_level :lvalue { $_debug_level }         # Debug level (integer)
+sub debug_level :lvalue { $_[0]->{debug_level} }         # Debug level (integer)
+sub adapter :lvalue { $_[0]->{adapter} }
+sub mapper :lvalue { $_[0]->{mapper} }
+
 
 =head2 $server = Continuity->new(...)
 
-The C<Continuity> object wires together an adapter and a mapper.
+The C<Continuity> object wires together an Adapter and a mapper.
 Creating the C<Continuity> object gives you the defaults wired together,
 or if user-supplied instances are provided, it wires those together.
 
@@ -189,11 +191,11 @@ Arguments:
 
 =item * C<staticp> -- defaults to C<< sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ } >>, used to indicate whether any request is for static content
 
-=item * C<debug_level> -- defaults to C<4> at the moment ;)
+=item * C<debug_level> -- Set level of debugging. 0 for nothing, 1 for warnings and system messages, 2 for request status info. Default is 1
 
 =back
 
-Arguments passed to the default adaptor:
+Arguments passed to the default adapter:
 
 =over 4
 
@@ -234,27 +236,29 @@ sub new {
     docroot => '.',   # default docroot
     mapper => undef,
     adapter => undef,
-    debug_level => 0, # XXX
+    debug_level => 1,
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
     staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
     no_content_type => 0,
     reap_after => undef,
-    @_,  
+    @_,
   }, $class;
 
   if($self->{reload}) {
     eval "use Module::Reload";
     $self->{reload} = 0 if $@;
-    $Module::Reload::Debug = 1 if $self->debug_level;
+    $Module::Reload::Debug = 1 if $self->debug_level > 1;
   }
 
-  # Set up the default adaptor.
+  # Set up the default Adapter.
   # The adapater plugs the system into a server (probably a Web server)
   # The default has its very own HTTP::Daemon running.
-  if(!$self->{adaptor}) {
-    require Continuity::Adapt::HttpDaemon;
-    $self->{adaptor} = Continuity::Adapt::HttpDaemon->new(
+  if(!$self->{adapter} || !(ref $self->{adapter})) {
+    my $adapter = "Continuity::Adapt::" . ($self->{adapter} || 'HttpDaemon');
+    eval "require $adapter";
+    die "Continuity: Unknown adapter '$adapter'\n" if $@;
+    $self->{adapter} = $adapter->new(
       docroot => $self->{docroot},
       server => $self,
       debug_level => $self->debug_level,
@@ -262,8 +266,6 @@ sub new {
       $self->{port} ? (LocalPort => $self->{port}) : (),
       $self->{cookie_life} ? (cookie_life => $self->{cookie_life}) : (), 
     );
-  } elsif(! ref $self->{adaptor}) {
-    die "Not a ref, $self->{adaptor}\n";
   }
 
   # Set up the default mapper.
@@ -299,7 +301,7 @@ sub new {
 
   async {
     while(1) {
-      my $r = $self->adaptor->get_request;
+      my $r = $self->adapter->get_request;
       if($self->{reload}) {
         Module::Reload->check;
       }
@@ -320,7 +322,7 @@ sub new {
   
       if($self->{staticp}->($r)) {
           $self->debug(3, "Sending static content... ");
-          $self->{adaptor}->send_static($r);
+          $self->{adapter}->send_static($r);
           $self->debug(3, "done sending static content.");
           next;
       }
@@ -353,7 +355,8 @@ no warnings 'redefine';
 sub loop {
   my ($self) = @_;
 
-  # Coro::Event is insane and wants us to have at least one event... or something
+  # This is our reaper event. It looks for expired sessions and kills them off.
+  # TODO: This needs some documentation at the very least
   async {
      my $timeout = 300;  
      $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
@@ -364,24 +367,23 @@ sub loop {
      }
   };
 
-  # XXX passing $self is completely invalid. loop is supposed to take a timeout
-  # as the parameter, but by passing self it creates a semi-valid timeout.
-  # Without this, with the current Coro and Event, it doesn't work.
+  # cede once to get our reaper running
   cede;
   Coro::Event::loop();
 }
 
+# This is our internal debugging tool.
+# Call it with $self->Continuity::debug(2, '...');
 sub debug {
   my ($self, $level, $msg) = @_;
-  if($self->debug_level and $level >= $self->debug_level) {
+  if($self->debug_level && $level <= $self->debug_level) {
+    if($level > 2) {
+      my ($package, $filename, $line) = caller;
+      print STDERR "$package:$line: ";
+    }
     print STDERR "$msg\n";
   }
 }
-
-sub adaptor :lvalue { $_[0]->{adaptor} }
-
-sub mapper :lvalue { $_[0]->{mapper} }
-
 
 =head1 SEE ALSO
 
