@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Continuity
-version:             0.97
+version:             0.98
 abstract:            Abstract away statelessness of HTTP, for stateful Web applications
 license:             ~
 author:              
@@ -11,7 +11,6 @@ requires:
     Coro:                          3.6
     Coro::Event:                   2.1
     HTTP::Daemon:                  1.36
-    Module::Reload:                1.07
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html
     version: 1.3
