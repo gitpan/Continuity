@@ -2,21 +2,12 @@
 
 use strict;
 use Test::More;
+require "t/test_helper.pl";
 
-eval "use Test::WWW::Mechanize";
-if($@) {
-  plan skip_all => 'Test::WWW::Mechanize not installed';
-} else {
-  plan tests => 4;
-}
+plan tests => 5;
 
-my $server_pid = open my $app, '-|', 'perl eg/addtwo.pl 2>&1'
-  or die "Error starting server: $!\n";
-$app->autoflush;
-
-my $server = <$app>;
-chomp $server;
-$server =~ s/^Please contact me at: //;
+my ($kid_out, $kid_pid) = start_proggie('eg/addtwo.pl');
+my $server = get_proggie_server_ok($kid_out);
 
 my $mech = Test::WWW::Mechanize->new;
 
@@ -36,5 +27,5 @@ $mech->submit;
 
 $mech->content_contains("The sum of $num1 and $num2 is $sum!");
 
-kill 1, $server_pid;
+kill 9, $kid_pid;
 

@@ -20,7 +20,23 @@ print $out $f;
 # *** This is the actual Changelog :) ***
 # ***************************************
 __DATA__
+Tue Mar 18 2008  awwaiid@thelackthereof.org
+  * Version bump and changelog update
+  * Fix label for Internal Use documentation on Request obj
+  * Fix indent and debug call for Inspector
+  * Default to empty cookie
+  * Remove lvalue accessors
+  * Don't print to STDERR without reason... since STDOUT doesn't go to the browser anyway
+
+Sat Mar 15 2008  awwaiid@thelackthereof.org
+  * Update tests to fork and self-execute
+  * Send server info to STDOUT instead of STDERR for testability (for now)
+
 Wed Mar 12 2008  awwaiid@thelackthereof.org
+  * Run against localhost instead of the given server name
+  tagged 0.98
+  * Comment out Module::Reload dep
+  * Update changelog and manifest for release
   * Version bump
   * Add 'perl' in to execute examples during testing
   * Make the print and send_headers methods chainable

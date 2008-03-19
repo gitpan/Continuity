@@ -2,22 +2,12 @@
 
 use strict;
 use Test::More;
-use IO::Handle;
+require "t/test_helper.pl";
 
-eval "use Test::WWW::Mechanize";
-if($@) {
-  plan skip_all => 'Test::WWW::Mechanize not installed';
-} else {
-  plan tests => 26;
-}
+plan tests => 27;
 
-my $server_pid = open my $app, '-|', 'perl eg/counter.pl 2>&1'
-  or die "Error starting server: $!\n";
-$app->autoflush;
-
-my $server = <$app>;
-chomp $server;
-$server =~ s/^Please contact me at: //;
+my ($kid_out, $kid_pid) = start_proggie('eg/counter.pl');
+my $server = get_proggie_server_ok($kid_out);
 
 my $mech1 = Test::WWW::Mechanize->new;
 
@@ -59,5 +49,5 @@ $mech2->content_contains('Count: 8', '(2) Updated count');
 $mech1->follow_link_ok({ text => 'Yes' }, 'Lets go negative!');
 $mech1->content_contains('Count: -1', 'Updated count');
 
-kill 1, $server_pid;
+kill 9, $kid_pid;
 

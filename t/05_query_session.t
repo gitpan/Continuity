@@ -3,20 +3,12 @@
 use strict;
 use Test::More;
 
-eval "use Test::WWW::Mechanize";
-if($@) {
-  plan skip_all => 'Test::WWW::Mechanize not installed';
-} else {
-  plan tests => 3;
-}
+require "t/test_helper.pl";
 
-my $server_pid = open my $app, '-|', 'perl eg/query_session.pl 2>&1'
-  or die "Error starting server: $!\n";
-$app->autoflush;
+plan tests => 4;
 
-my $server = <$app>;
-chomp $server;
-$server =~ s/^Please contact me at: //;
+my ($kid_out, $kid_pid) = start_proggie('eg/query_session.pl');
+my $server = get_proggie_server_ok($kid_out);
 
 my $mech = Test::WWW::Mechanize->new;
 
@@ -25,5 +17,5 @@ $mech->follow_link_ok({ text => 'Click here to continue' }, 'Link-based (GET) qu
 $mech->click_button( value => 'Click here to continue' );
 $mech->follow_link_ok({ text => 'Click here to get a new one' }, 'Begin again');
 
-kill 1, $server_pid;
+kill 9, $kid_pid;
 

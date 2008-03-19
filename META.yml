@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                Continuity
-version:             0.98
+version:             0.99
 abstract:            Abstract away statelessness of HTTP, for stateful Web applications
 license:             ~
 author:              
