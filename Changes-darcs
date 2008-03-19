@@ -20,7 +20,13 @@ print $out $f;
 # *** This is the actual Changelog :) ***
 # ***************************************
 __DATA__
+Wed Mar 19 2008  awwaiid@thelackthereof.org
+  * Version bump
+  * Set Coro version requirement to 4.37 so it will pass tests
+  * Add test_helper to MANIFEST
+
 Tue Mar 18 2008  awwaiid@thelackthereof.org
+  tagged 0.99
   * Version bump and changelog update
   * Fix label for Internal Use documentation on Request obj
   * Fix indent and debug call for Inspector
