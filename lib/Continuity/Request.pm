@@ -23,15 +23,30 @@ Continuity::Request - Simple HTTP::Request-like API for requests inside Continui
 
 Suspend execution until a new Web request is available.
 
-=head2 $name = $request->param("name");  
+=head2 $val = $request->param('name');
+
+=head2 @vals = $request->param('name');
+
+=head2 @vals = $request->param('name1', 'name2');
 
 Fetch a CGI POST/GET parameter.
 
-=head2 @param_names = $request->param();
+If there is more than one parameter with the given name, then scalar context
+gets the first instance and list context gets all of them. Providing multiple
+param names will return the values for each (and if one of the params has
+multiple values then it will be confusing!).
 
-Fetch a list of posted parameters.
+Calling the param method with no parameters is equivalent to calling the params
+method.
 
-=head2 $request->print("Foo!\n");
+=head2 %params = $request->params();
+
+=head2 @params = $request->params();
+
+Get a list of all key/value pairs. Repeated values are included, but if you
+treat it like a hash it will act like one.
+
+=head2 $request->print("Foo!<br>");
 
 Write output (eg, HTML).
 
@@ -47,12 +62,12 @@ Set a cookie to be sent out with the headers, next time the headers go out
 (next request if data has been written to the client already, otherwise this
 request).  (May not yet be supported by the FastCGI adapter yet.)
 
-=head2 $request->uri();
+=head2 $request->uri;
 
 Straight from L<HTTP::Request>, returns a URI object.  (Probably not yet
 supported by the FastCGI adapter.)
 
-=head2 $request->method();
+=head2 $request->method;
 
 Returns 'GET', 'POST', or whatever other HTTP command was issued.  Continuity
 currently punts on anything but GET and POST out of paranoia.
@@ -63,16 +78,16 @@ Send this in the headers
 
 =head1 INTERNAL METHODS
 
-=head2 $request->send_basic_header();
+=head2 $request->send_basic_header;
 
 Continuity does this for you, but it's still part of the API of
 Continuity::Request objects.
 
-=head2 $request->end_request();
+=head2 $request->end_request;
 
 Ditto above.
 
-=head2 $request->send_static();
+=head2 $request->send_static;
 
 Controlled by the C<< staticp => sub { ... } >> argument pair to the main
 constructor call to C<< Continuity->new() >>.

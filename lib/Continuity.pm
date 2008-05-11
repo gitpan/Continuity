@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.991';
+our $VERSION = '0.992';
 
 =head1 NAME
 
@@ -411,13 +411,13 @@ sub loop {
 # This is our internal debugging tool.
 # Call it with $self->Continuity::debug(2, '...');
 sub debug {
-  my ($self, $level, $msg) = @_;
+  my ($self, $level, @msg) = @_;
   if($self->debug_level && $level <= $self->debug_level) {
     if($level > 2) {
       my ($package, $filename, $line) = caller;
       print "$package:$line: ";
     }
-    print "$msg\n";
+    print "@msg\n";
   }
 }
 
