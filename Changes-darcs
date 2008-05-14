@@ -20,7 +20,17 @@ print $out $f;
 # *** This is the actual Changelog :) ***
 # ***************************************
 __DATA__
+Tue May 13 2008  awwaiid@thelackthereof.org
+  * Fix endless params parsing in FCGI too
+  * Add test of params example
+  * Add parameter example
+
+Mon May 12 2008  awwaiid@thelackthereof.org
+  * Stop deep recursion
+
 Sun May 11 2008  awwaiid@thelackthereof.org
+  * Add telnet terminal example
+  tagged 0.992
   * Update Changes
   * Update MANIFEST
   * Update README and bump version
