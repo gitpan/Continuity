@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.994';
+our $VERSION = '0.995';
 
 =head1 NAME
 
@@ -201,11 +201,12 @@ use Coro;
 use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
 use Continuity::RequestHolder;
+use List::Util 'first';
 
 sub debug_level :lvalue { $_[0]->{debug_level} }         # Debug level (integer)
 sub adapter :lvalue { $_[0]->{adapter} }
 sub mapper :lvalue { $_[0]->{mapper} }
-
+sub debug_callback :lvalue { $_[0]->{debug_callback} }
 
 =head2 $server = Continuity->new(...)
 
@@ -228,6 +229,8 @@ Arguments:
 =item * C<staticp> -- defaults to C<< sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ } >>, used to indicate whether any request is for static content
 
 =item * C<debug_level> -- Set level of debugging. 0 for nothing, 1 for warnings and system messages, 2 for request status info. Default is 1
+
+=item * C<debug_callback> -- Callback for debug messages. Default is print.
 
 =back
 
@@ -273,11 +276,13 @@ sub new {
     mapper => undef,
     adapter => undef,
     debug_level => 1,
+    debug_callback => sub { print "@_\n" },
     reload => 1, # XXX
     callback => (exists &::main ? \&::main : undef),
     staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
     no_content_type => 0,
     reap_after => undef,
+    allowed_methods => ['GET', 'POST'],
     @_,
   }, $class;
 
@@ -298,6 +303,7 @@ sub new {
       docroot => $self->{docroot},
       server => $self,
       debug_level => $self->debug_level,
+      debug_callback => sub { print "@_\n" },
       no_content_type => $self->{no_content_type},
       $self->{port} ? (LocalPort => $self->{port}) : (),
       $self->{cookie_life} ? (cookie_life => $self->{cookie_life}) : (), 
@@ -323,6 +329,7 @@ sub new {
 
     $self->{mapper} = Continuity::Mapper->new(
       debug_level => $self->debug_level,
+      debug_callback => sub { print "@_\n" },
       callback => $self->{callback},
       server => $self,
       %optional,
@@ -342,11 +349,14 @@ sub new {
         Module::Reload->check;
       }
 
-      unless($r->method eq 'GET' or $r->method eq 'POST') {
-         $r->send_error(RC_BAD_REQUEST);
-         $r->print("ERROR -- GET and POST only for now\r\n\r\n");
-         $r->close;
-         next;
+      my $method = $r->method;
+      unless(first { $_ eq $method } @{$self->{allowed_methods}}) {
+        $r->conn->send_error(
+          RC_BAD_REQUEST,
+          "$method not supported -- only (@{$self->{allowed_methods}}) for now"
+        );
+        $r->conn->close;
+        next;
       }
   
       # We need some way to decide if we should send static or dynamic
@@ -412,12 +422,14 @@ sub loop {
 # Call it with $self->Continuity::debug(2, '...');
 sub debug {
   my ($self, $level, @msg) = @_;
+  my $output;
   if($self->debug_level && $level <= $self->debug_level) {
     if($level > 2) {
       my ($package, $filename, $line) = caller;
-      print "$package:$line: ";
+      $output .= "$package:$line: ";
     }
-    print "@msg\n";
+    $output .= "@msg";
+    $self->debug_callback->($output);
   }
 }
 
