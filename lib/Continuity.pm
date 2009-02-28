@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '0.997';
+our $VERSION = '0.998';
 
 =head1 NAME
 
@@ -464,7 +464,7 @@ similar technologies such as L<http://seaside.st/>.
 
 Website/Wiki: L<http://continuity.tlt42.org/>
 
-L<Continuity::Request>, L<Continuity::Mapper>,
+L<Continuity::Request>, L<Continuity::RequestCallbacks>, L<Continuity::Mapper>,
 L<Continuity::Adapt::HttpDaemon>, L<Coro>
 
 =head1 AUTHOR
