@@ -1,17 +1,25 @@
 --- #YAML:1.0
-name:                Continuity
-version:             0.998
-abstract:            Abstract away statelessness of HTTP, for stateful Web applications
-license:             perl
-author:              
+name:               Continuity
+version:            1.0
+abstract:           Abstract away statelessness of HTTP, for stateful Web applications
+author:
     - Brock Wilcox <awwaiid@thelackthereof.org>
-generated_by:        ExtUtils::MakeMaker version 6.42 and then some
-distribution_type:   module
-requires:     
-    Event:                         0
-    Coro:                          4.37
-    Coro::Event:                   0
-    HTTP::Daemon:                  1.36
+license:            perl
+distribution_type:  module
+configure_requires:
+    Event:         0
+    ExtUtils::MakeMaker:  0
+build_requires:
+    ExtUtils::MakeMaker:  0
+requires:
+    Coro:          4.37
+    Coro::Event:   0
+    HTTP::Daemon:  1.36
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version 6.50 and then some
 meta-spec:
-    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
-    version: 1.3
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4
