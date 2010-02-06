@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '1.01';
+our $VERSION = '1.1';
 
 =head1 NAME
 
@@ -32,13 +32,14 @@ at any time without exiting. This is significantly different from the
 traditional CGI model of web applications in which a program is restarted for
 each new request.
 
-The program is passed a C<< $request >> variable which holds the request (including
-any form data) sent from the browser. In concept, this is a lot like a C<$cgi>
-object from CGI.pm with one very very significant difference. At any point in
-the code you can call $request->next. Your program will then suspend, waiting
-for the next request in the session. Since the program doesn't actually halt,
-all state is preserved, including lexicals -- getting input from the browser is
-then similar to doing C<< $line = <> >> in a command-line application.
+The program is passed a C<< $request >> variable which holds the request
+(including any form data) sent from the browser. In concept, this is a lot like
+a C<$cgi> object from CGI.pm with one very very significant difference. At any
+point in the code you can call $request->next. Your program will then suspend,
+waiting for the next request in the session. Since the program doesn't actually
+halt, all state is preserved, including lexicals -- getting input from the
+browser is then similar to doing C<< $line = <> >> in a command-line
+application.
 
 =head1 GETTING STARTED
 
@@ -218,9 +219,8 @@ C<$request> object that is passed to each session in your application.
 =cut
 
 use strict;
-use warnings; # XXX -- while in devolopment
+use warnings;
 
-use IO::Handle;
 use Coro;
 use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
@@ -295,6 +295,7 @@ sub new {
   my $this = shift;
   my $class = ref($this) || $this;
 
+  no strict 'refs';
   my $self = bless { 
     docroot => '.',   # default docroot
     mapper => undef,
@@ -302,13 +303,16 @@ sub new {
     debug_level => 1,
     debug_callback => sub { print STDERR "@_\n" },
     reload => 1, # XXX
-    callback => (exists &::main ? \&::main : undef),
+    callback => (exists &{caller()."::main"} ? \&{caller()."::main"} : undef),
+    # callback => (exists &::main ? \&::main : undef),
     staticp => sub { $_[0]->url =~ m/\.(jpg|jpeg|gif|png|css|ico|js)$/ },
     no_content_type => 0,
     reap_after => undef,
     allowed_methods => ['GET', 'POST'],
     @_,
   }, $class;
+
+  use strict 'refs';
 
   if($self->{reload}) {
     eval "use Module::Reload";
@@ -320,7 +324,12 @@ sub new {
   # The adapater plugs the system into a server (probably a Web server)
   # The default has its very own HTTP::Daemon running.
   if(!$self->{adapter} || !(ref $self->{adapter})) {
-    my $adapter = "Continuity::Adapt::" . ($self->{adapter} || 'HttpDaemon');
+    my $adapter_name = 'HttpDaemon';
+    if(defined &Plack::Runner::new) {
+      require Continuity::Adapt::PSGI;
+      $adapter_name = 'PSGI';
+    }
+    my $adapter = "Continuity::Adapt::" . ($self->{adapter} || $adapter_name);
     eval "require $adapter";
     die "Continuity: Unknown adapter '$adapter'\n" if $@;
     $self->{adapter} = $adapter->new(
@@ -366,52 +375,62 @@ sub new {
 
   }
 
-  async {
-    while(1) {
-      my $r = $self->adapter->get_request;
-      if($self->{reload}) {
-        Module::Reload->check;
-      }
-
-      my $method = $r->method;
-      unless(first { $_ eq $method } @{$self->{allowed_methods}}) {
-        $r->conn->send_error(
-          RC_BAD_REQUEST,
-          "$method not supported -- only (@{$self->{allowed_methods}}) for now"
-        );
-        $r->conn->close;
-        next;
-      }
-  
-      # We need some way to decide if we should send static or dynamic
-      # content.
-      # To save users from having to re-implement (likely incorrecty)
-      # basic security checks like .. abuse in GET paths, we should provide
-      # a default implementation -- preferably one already on CPAN.
-      # Here's a way: ask the mapper.
-  
-      if($self->{staticp}->($r)) {
-          $self->debug(3, "Sending static content... ");
-          $self->{adapter}->send_static($r);
-          $self->debug(3, "done sending static content.");
-          next;
-      }
-
-      # Right now, map takes one of our Continuity::RequestHolder objects (with conn and request set) and sets queue
-
-      # This actually finds the thing that wants it, and gives it to it
-      # (executes the continuation)
-      $self->debug(3, "Calling map... ");
-      $self->mapper->map($r);
-      $self->debug(3, "done mapping.");
-
-    }
-  
-    $self->debug(2, "Done processing request, waiting for next\n");
-    
-  };
+  $self->start_request_loop;
 
   return $self;
+}
+
+sub start_request_loop {
+  my ($self) = @_;
+  async {
+    while(1) {
+      $self->debug(3, "Getting request from adapter");
+      my $r = $self->adapter->get_request;
+      $self->debug(3, "Handling request");
+      $self->handle_request($r);
+    }
+  };
+}
+
+sub handle_request {
+  my ($self, $r) = @_;
+
+  if($self->{reload}) {
+    Module::Reload->check;
+  }
+
+  my $method = $r->method;
+  unless(first { $_ eq $method } @{$self->{allowed_methods}}) {
+    $r->conn->send_error(
+      RC_BAD_REQUEST,
+      "$method not supported -- only (@{$self->{allowed_methods}}) for now"
+    );
+    $r->conn->close;
+    return;
+  }
+
+  # We need some way to decide if we should send static or dynamic
+  # content.
+  # To save users from having to re-implement (likely incorrecty)
+  # basic security checks like .. abuse in GET paths, we should provide
+  # a default implementation -- preferably one already on CPAN.
+  # Here's a way: ask the mapper.
+
+  if($self->{staticp}->($r)) {
+    $self->debug(3, "Sending static content... ");
+    $self->{adapter}->send_static($r);
+    $self->debug(3, "done sending static content.");
+    return;
+  }
+
+  # Right now, map takes one of our Continuity::RequestHolder objects (with conn and request set) and sets queue
+
+  # This actually finds the thing that wants it, and gives it to it
+  # (executes the continuation)
+  $self->debug(3, "Calling map... ");
+  $self->mapper->map($r);
+  $self->debug(3, "done mapping.");
+  $self->debug(2, "Done processing request, waiting for next\n");
 }
 
 =head2 $server->loop()
@@ -430,6 +449,17 @@ sub loop {
   async {
      my $timeout = 300;  
      $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
+     # This should totally work... I don't know why it doesn't
+     # use AnyEvent;
+     # my $timeout_cond = AnyEvent->condvar;
+     # my $timer = AnyEvent->timer(
+      # interval => $timeout,
+      # cb => sub { $timeout_cond->send }
+     # );
+     # while($timeout_cond->recv) {
+        # $self->debug(3, "debug: loop calling reap");
+        # $self->mapper->reap($self->{reap_after}) if $self->{reap_after};
+     # }
      my $timer = Coro::Event->timer(interval => $timeout, );
      while ($timer->next) {
         $self->debug(3, "debug: loop calling reap");
@@ -475,7 +505,7 @@ L<Continuity::Adapt::HttpDaemon>, L<Coro>
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2009 Brock Wilcox <awwaiid@thelackthereof.org>. All
+  Copyright (c) 2004-2010 Brock Wilcox <awwaiid@thelackthereof.org>. All
   rights reserved.  This program is free software; you can redistribute it
   and/or modify it under the same terms as Perl itself.
 
