@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Continuity
-version:            1.1
+version:            1.1.1
 abstract:           Abstract away statelessness of HTTP, for stateful Web applications
 author:
     - Brock Wilcox <awwaiid@thelackthereof.org>
