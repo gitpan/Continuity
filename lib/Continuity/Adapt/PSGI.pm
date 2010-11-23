@@ -1,17 +1,26 @@
 package Continuity::Adapt::PSGI;
 
+# XXX C::A::PSGI doesn't support streaming as it is; rather than return all of the data at once, create an IO::Handle like object for Plack to read from
+
 =head1 NAME
 
 Continuity::Adapt::PSGI - PSGI backend for Continuity
 
 =head1 SYNOPSIS
 
-  # Run with "plackup -s Coro demo.pl"
+  # Run with "plackup -s <whichever Coro friendly server> demo.pl"
+
+  # Twiggy and Corona are two Coro friendly Plack servers:
+  #
+  #       "Twiggy is a lightweight and fast HTTP server"
+  #       "Corona is a Coro based Plack web server. It uses Net::Server::Coro under the hood"
 
   use Continuity;
 
-  my $server = Continuity->new();
-  $server->loop;
+  my $server = Continuity->new( 
+      adapter => Continuity::Adapt::PSGI->new,
+      staticp => sub { 0 },
+  );
 
   sub main {
     my $request = shift;
@@ -22,12 +31,22 @@ Continuity::Adapt::PSGI - PSGI backend for Continuity
     }
   }
 
+  $server->loop;
+
 =cut
 
 use strict;
 use warnings;
+
 use Continuity::Request;
 use base 'Continuity::Request';
+
+use Coro::Channel;
+use Coro::Signal;
+use Plack;
+use Plack::App::File; # use this now; no surprises for later
+
+warn "tested against Plack 0.9938; you have $Plack::VERSION" if $Plack::VERSION < 0.9938;
 
 sub debug_level { exists $_[1] ? $_[0]->{debug_level} = $_[1] : $_[0]->{debug_level} }
 
@@ -35,24 +54,107 @@ sub debug_callback { exists $_[1] ? $_[0]->{debug_callback} = $_[1] : $_[0]->{de
 
 sub new {
   my $class = shift;
-  my $self = {
+  bless {
     first_request => 1,
     debug_level => 1,
     debug_callback => sub { print STDERR "@_\n" },
+    request_queue => Coro::Channel->new(),
     @_
-  };
-  bless $self, $class;
-  return $self;
+  }, $class;
 }
 
 sub get_request {
-  my ($self, $env) = @_;
+  # called from Continuity's main loop (new calls start_request_loop; start_request_loop gets requests from here or whereever and passes them to the mapper)
+  my ($self) = @_;
   $self->Continuity::debug(3, 'get_request called');
-  my $request = Continuity::Adapt::PSGI::Request->new( $env );
+  my $request = $self->{request_queue}->get or die;
   return $request;
 }
 
+sub loop_hook {
+
+    my $self = shift;
+
+    # $server->loop calls this; plackup run .psgi files except a coderef as the last value and this lets that coderef fall out of the call to $server->loop
+    # uniqe to the PSGI adapter -- a coderef that gets invoked when a request comes in
+
+    my $app = sub {
+        my $env = shift;
+
+        # stuff $env onto a queue that get_request above pulls from; get_request is called from Continuity's main execution context/loop
+        # Continuity's main execution loop invokes the Mapper to send the request across a queue to the per session execution context (creating a new one as needed)
+
+# use Data::Dumper; warn Dumper $env;
+        my $request = Continuity::Adapt::PSGI::Request->new( $env ); # make it now and send it through the queue fully formed
+        $self->{request_queue}->put($request);
+
+        $request->{response_done_watcher}->wait;
+        return [ $request->{response_code}, $request->{response_headers}, $request->{response_content} ];
+
+  };
+  Coro::cede();
+  return $app;
+
+}
+
+=head2 C<< $adapter->map_path($path) >>
+
+Decodes URL-encoding in the path and attempts to guard against malice.
+Returns the processed filesystem path.
+
+=cut
+
+sub map_path {
+  my $self = shift;
+  my $path = shift() || '';
+  # my $docroot = $self->docroot || '';
+  my $docroot = Cwd::getcwd();
+  $docroot .= '/' if $docroot and $docroot ne '.' and $docroot !~ m{/$};
+  # some massaging, also makes it more secure
+  $path =~ s/%([0-9a-fA-F][0-9a-fA-F])/chr hex $1/ge;
+  $path =~ s%//+%/%g unless $docroot;
+  $path =~ s%/\.(?=/|$)%%g;
+  $path =~ s%/[^/]+/\.\.(?=/|$)%%g;
+
+  # if($path =~ m%^/?\.\.(?=/|$)%) then bad
+
+$self->Continuity::debug(2,"path: $docroot$path\n");
+
+  return "$docroot$path";
+}
+
+
+sub send_static {
+  my ($self, $r) = @_;
+
+  # this is called from Continuity.pm to give a request back to us to deal with that it got from our get_request.
+  # rather than sending it to the mapper to get sent to the per-user execution context, it gets returned straight back here.
+  # $r is an instance of Continuity::Adapt::PSGI::Request
+
+  my $url = $r->url;
+  $url =~ s{\?.*}{};
+  my $path = $self->map_path($url) or do { 
+       $self->Continuity::debug(1, "can't map path: " . $url);
+       # die; # XXX don't die except in debugging
+      ( $r->{response_code}, $r->{response_headers}, $r->{response_content} ) = ( 404, [], [ "Static file not found" ] );
+      $r->{response_done_watcher}->send;
+      return;
+  };
+
+  my $stuff = Plack::App::File->serve_path({},$path);
+
+  ( $r->{response_code}, $r->{response_headers}, $r->{response_content} ) = @$stuff;
+  $r->{response_done_watcher}->send;
+
+}
+
+#
+#
+#
+
 package Continuity::Adapt::PSGI::Request;
+
+use Coro::Signal;
 
 # List of cookies to send
 sub cookies { exists $_[1] ? $_[0]->{cookies} = $_[1] : $_[0]->{cookies} }
@@ -69,7 +171,7 @@ sub new {
     response_code => 200,
     response_headers => [],
     response_content => [],
-    response_done_watcher => AnyEvent->condvar,
+    response_done_watcher => Coro::Signal->new,
     %$env
   };
   bless $self, $class;
@@ -104,15 +206,6 @@ sub params {
     my $self = shift;
     $self->param;
     return @{$self->cached_params};
-}
-
-sub get_response {
-  my $self = shift;
-
-  # Wait for the response to be all finished
-  $self->{response_done_watcher}->recv;
-
-  return [ $self->{response_code}, $self->{response_headers}, $self->{response_content} ];
 }
 
 sub method {
@@ -185,55 +278,4 @@ sub end_request {
   $self->{response_done_watcher}->send;
 }
 
-package Continuity;
-
-# Override the ->loop
-no warnings 'redefine';
-
-# We don't need a request loop
-sub start_request_loop { }
-
-our $timer;
-
-sub loop {
-  my ($self) = @_;
-  $self->debug(3, "Starting overridden loop");
-
-  # This is our reaper event. It looks for expired sessions and kills them off.
-  # TODO: This needs some documentation at the very least
-  # async {
-     # my $timeout = 300;  
-     # $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
-     # my $timer = Coro::Event->timer(interval => $timeout, );
-     # while ($timer->next) {
-        # $self->debug(3, "debug: loop calling reap");
-        # $self->mapper->reap($self->{reap_after}) if $self->{reap_after};
-     # }
-  # };
-
-  # cede once to get our reaper running
-  # $self->debug(3, "Cede once for reaper");
-  # cede;
-
-  $self->debug(3, "Creating app");
-
-  my $app = sub {
-
-    my $env = shift;
-
-    my $r = $self->adapter->get_request($env);
-    $self->handle_request($r);
-    my $response = $r->get_response(); # waits for the response to be ready
-    return $response;
-
-  };
-
-  Coro::cede();
- 
-  $self->debug(3, "Returning app");
-  return $app;
-}
-
 1;
-
-

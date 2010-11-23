@@ -60,7 +60,7 @@ sub main {
     }
     print STDERR "Num: $num\tPageID: $pageID\n";
     print STDERR "Doing redirect after POST\n";
-    $request->request->conn->send_redirect("/?pageID=$pageID",302);
+    $request->request->conn->send_redirect("/?pageID=$pageID",303);
     $request->next;
   }
 }

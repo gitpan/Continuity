@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '1.1.1';
+our $VERSION = '1.2.0';
 
 =head1 NAME
 
@@ -443,33 +443,31 @@ no warnings 'redefine';
 
 sub loop {
   my ($self) = @_;
+  $self->reaper;
 
+  if($self->{adapter}->can('loop_hook')) {
+      return $self->{adapter}->loop_hook;
+  }
+
+  Coro::Event::loop();
+}
+
+sub reaper {
   # This is our reaper event. It looks for expired sessions and kills them off.
   # TODO: This needs some documentation at the very least
+  # XXX hello?  configurable timeout?  hello?
+  my $self = shift;
   async {
      my $timeout = 300;  
      $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
-     # This should totally work... I don't know why it doesn't
-     # use AnyEvent;
-     # my $timeout_cond = AnyEvent->condvar;
-     # my $timer = AnyEvent->timer(
-      # interval => $timeout,
-      # cb => sub { $timeout_cond->send }
-     # );
-     # while($timeout_cond->recv) {
-        # $self->debug(3, "debug: loop calling reap");
-        # $self->mapper->reap($self->{reap_after}) if $self->{reap_after};
-     # }
      my $timer = Coro::Event->timer(interval => $timeout, );
      while ($timer->next) {
         $self->debug(3, "debug: loop calling reap");
         $self->mapper->reap($self->{reap_after}) if $self->{reap_after};
      }
   };
-
-  # cede once to get our reaper running
+  # cede once to get the reaper running
   cede;
-  Coro::Event::loop();
 }
 
 # This is our internal debugging tool.
@@ -496,6 +494,8 @@ Website/Wiki: L<http://continuity.tlt42.org/>
 
 L<Continuity::Request>, L<Continuity::RequestCallbacks>, L<Continuity::Mapper>,
 L<Continuity::Adapt::HttpDaemon>, L<Coro>
+
+L<AnyEvent::DBI> and L<Coro::Mysql> for concurrent database access.
 
 =head1 AUTHOR
 
