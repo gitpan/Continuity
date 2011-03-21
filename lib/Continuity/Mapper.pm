@@ -55,7 +55,7 @@ when C<query_session> is set but no GET/POST parameter of the specified name
 
 If you use C<query_session> to keep the user associated with their session,
 every link and form in the application must be written to include the session
-id. The currently assigned ID can be gotten at with C<$request->session_id>.
+id. The currently assigned ID can be gotten at with C<< $request->session_id >>.
 
 For each incoming HTTP hit, L<Continuity> must use some criteria for deciding
 which execution context to send that hit to.  For each of these that are set
@@ -268,14 +268,18 @@ sub new_request_queue {
     debug_callback => $self->debug_callback,
   );
 
-  # async just puts the contents into the global event queue to be executed
-  # at some later time
+  # We need something to start pulling on the other side of this queue, so
+  # we'll set that up now. It won't actually be triggered until _after_ we put
+  # something in the queue though. I know, because we wouldn't be making a
+  # new_request_queue unless we were about to put something into said queue :)
   async {
+    local $Coro::current->{desc} = 'Continuity Session';
+ 
     $request_holder->next if $self->{implicit_first_next};
     $self->{callback}->($request_holder, @_);
-    $request_holder->end_request();
 
-    # If the callback exits, the session is over
+    # Well the callback returned! So they must be done... session over.
+    $request_holder->end_request();
     delete $self->{sessions}->{$session_id};
     $self->Continuity::debug(2,"Session $session_id closed");
   };

@@ -41,6 +41,7 @@ use warnings;
 use Continuity::Request;
 use base 'Continuity::Request';
 
+use Coro;
 use Coro::Channel;
 use Coro::Signal;
 use Plack;
@@ -66,35 +67,53 @@ sub new {
 sub get_request {
   # called from Continuity's main loop (new calls start_request_loop; start_request_loop gets requests from here or whereever and passes them to the mapper)
   my ($self) = @_;
-  $self->Continuity::debug(3, 'get_request called');
   my $request = $self->{request_queue}->get or die;
   return $request;
 }
 
 sub loop_hook {
 
-    my $self = shift;
+  my $self = shift;
 
-    # $server->loop calls this; plackup run .psgi files except a coderef as the last value and this lets that coderef fall out of the call to $server->loop
-    # uniqe to the PSGI adapter -- a coderef that gets invoked when a request comes in
+  # $server->loop calls this; plackup run .psgi files except a coderef as the
+  # last value and this lets that coderef fall out of the call to
+  # $server->loop.
 
-    my $app = sub {
-        my $env = shift;
+  # uniqe to the PSGI adapter -- a coderef that gets invoked when a request
+  # comes in
 
-        # stuff $env onto a queue that get_request above pulls from; get_request is called from Continuity's main execution context/loop
-        # Continuity's main execution loop invokes the Mapper to send the request across a queue to the per session execution context (creating a new one as needed)
+  my $app = sub {
+    my $env = shift;
 
-# use Data::Dumper; warn Dumper $env;
-        my $request = Continuity::Adapt::PSGI::Request->new( $env ); # make it now and send it through the queue fully formed
+    unless ($env->{'psgi.streaming'}) {
+      die 'This application needs psgi.streaming support!';
+    }
+
+    # stuff $env onto a queue that get_request above pulls from; get_request is
+    # called from Continuity's main execution context/loop. Continuity's main
+    # execution loop invokes the Mapper to send the request across a queue to
+    # the per session execution context (creating a new one as needed).
+
+    return sub {
+      my $response = shift;
+
+      async {
+        local $Coro::current->{desc} = 'PSGI Response Maker';
+
+        # make it now and send it through the queue fully formed
+        my $request = Continuity::Adapt::PSGI::Request->new( $env, $response );
         $self->{request_queue}->put($request);
 
+        # Now... we wait!
         $request->{response_done_watcher}->wait;
-        return [ $request->{response_code}, $request->{response_headers}, $request->{response_content} ];
-
+      };
+    };
   };
-  Coro::cede();
-  return $app;
 
+  # Is this needed?
+  Coro::cede();
+
+  return $app;
 }
 
 =head2 C<< $adapter->map_path($path) >>
@@ -109,7 +128,7 @@ sub map_path {
   my $path = shift() || '';
   # my $docroot = $self->docroot || '';
   my $docroot = Cwd::getcwd();
-  $docroot .= '/' if $docroot and $docroot ne '.' and $docroot !~ m{/$};
+  #$docroot .= '/' if $docroot and $docroot ne '.' and $docroot !~ m{/$};
   # some massaging, also makes it more secure
   $path =~ s/%([0-9a-fA-F][0-9a-fA-F])/chr hex $1/ge;
   $path =~ s%//+%/%g unless $docroot;
@@ -131,10 +150,11 @@ sub send_static {
   # rather than sending it to the mapper to get sent to the per-user execution context, it gets returned straight back here.
   # $r is an instance of Continuity::Adapt::PSGI::Request
 
-  my $url = $r->url;
-  $url =~ s{\?.*}{};
-  my $path = $self->map_path($url) or do { 
-       $self->Continuity::debug(1, "can't map path: " . $url);
+  my $url_path = $r->url_path;
+
+  $url_path =~ s{\?.*}{};
+  my $path = $self->map_path($url_path) or do { 
+       $self->Continuity::debug(1, "can't map path: " . $url_path);
        # die; # XXX don't die except in debugging
       ( $r->{response_code}, $r->{response_headers}, $r->{response_content} ) = ( 404, [], [ "Static file not found" ] );
       $r->{response_done_watcher}->send;
@@ -144,6 +164,9 @@ sub send_static {
   my $stuff = Plack::App::File->serve_path({},$path);
 
   ( $r->{response_code}, $r->{response_headers}, $r->{response_content} ) = @$stuff;
+  $r->response->(
+    [ $r->response_code, $r->response_headers, $r->response_content ]
+  );
   $r->{response_done_watcher}->send;
 
 }
@@ -155,6 +178,7 @@ sub send_static {
 package Continuity::Adapt::PSGI::Request;
 
 use Coro::Signal;
+use Coro::AnyEvent;
 
 # List of cookies to send
 sub cookies { exists $_[1] ? $_[0]->{cookies} = $_[1] : $_[0]->{cookies} }
@@ -165,13 +189,28 @@ sub no_content_type { exists $_[1] ? $_[0]->{no_content_type} = $_[1] : $_[0]->{
 # CGI query params
 sub cached_params { exists $_[1] ? $_[0]->{cached_params} = $_[1] : $_[0]->{cached_params} }
 
+# The writer is kinda like our connection
+sub writer { exists $_[1] ? $_[0]->{writer} = $_[1] : $_[0]->{writer} }
+sub response { exists $_[1] ? $_[0]->{response} = $_[1] : $_[0]->{response} }
+
+sub response_code { exists $_[1] ? $_[0]->{response_code} = $_[1] : $_[0]->{response_code} }
+sub response_headers { exists $_[1] ? $_[0]->{response_headers} = $_[1] : $_[0]->{response_headers} }
+sub response_content { exists $_[1] ? $_[0]->{response_content} = $_[1] : $_[0]->{response_content} }
+
+sub debug_level { exists $_[1] ? $_[0]->{debug_level} = $_[1] : $_[0]->{debug_level} }
+
+sub debug_callback { exists $_[1] ? $_[0]->{debug_callback} = $_[1] : $_[0]->{debug_callback} }
+
 sub new {
-  my ($class, $env) = @_;
+  my ($class, $env, $response) = @_;
   my $self = {
     response_code => 200,
     response_headers => [],
     response_content => [],
     response_done_watcher => Coro::Signal->new,
+    response => $response,
+    debug_level => 3,
+    debug_callback => sub { print STDERR "@_\n" },
     %$env
   };
   bless $self, $class;
@@ -218,6 +257,11 @@ sub url {
   return $self->{'psgi.url_scheme'} . '://' . $self->{HTTP_HOST} . $self->{PATH_INFO};
 }
 
+sub url_path {
+  my ($self) = @_;
+  return $self->{PATH_INFO};
+}
+
 sub uri {
   my $self = shift;
   return $self->url(@_);
@@ -248,31 +292,39 @@ sub send_basic_header {
     my $self = shift;
     my $cookies = $self->cookies;
     $self->cookies('');
-    #$self->conn->send_basic_header;  # perhaps another flag should cover sending this, but it shouldn't be called "no_content_type"
+
     unless($self->no_content_type) {
       push @{ $self->{response_headers} },
            "Cache-Control" => "private, no-store, no-cache",
            "Pragma" => "no-cache",
            "Expires" => "0",
            "Content-type" => "text/html",
-           #$cookies;
       ;
     }
-    1;
+
+    my $writer = $self->response->(
+      [ $self->response_code, $self->response_headers ]
+    );
+    
+    $self->writer( $writer );
 }
 
 sub print {
   my $self = shift;
-  push @{ $self->{response_content} }, @_;
+
+  $self->writer->write( @_ );
 
   # This is a good time to let other stuff run
-  Coro::cede();
+  Coro::AnyEvent::idle();
 
   return $self;
 }
 
 sub end_request {
   my $self = shift;
+  
+  # Tell our writer that we're done
+  $self->writer->close;
 
   # Signal that we are done building our response
   $self->{response_done_watcher}->send;

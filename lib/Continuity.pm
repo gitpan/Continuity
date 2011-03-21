@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '1.3';
+our $VERSION = '1.4';
 
 =head1 NAME
 
@@ -222,7 +222,6 @@ use strict;
 use warnings;
 
 use Coro;
-use Coro::Event;
 use HTTP::Status; # to grab static response codes. Probably shouldn't be here
 use Continuity::RequestHolder;
 use List::Util 'first';
@@ -383,6 +382,7 @@ sub new {
 sub start_request_loop {
   my ($self) = @_;
   async {
+    local $Coro::current->{desc} = 'Continuity Request Loop';
     while(1) {
       $self->debug(3, "Getting request from adapter");
       my $r = $self->adapter->get_request;
@@ -443,11 +443,13 @@ no warnings 'redefine';
 
 sub loop {
   my ($self) = @_;
-  $self->reaper;
 
   if($self->{adapter}->can('loop_hook')) {
       return $self->{adapter}->loop_hook;
   }
+  
+  eval 'use Coro::Event';
+  $self->reaper;
 
   Coro::Event::loop();
 }
@@ -458,6 +460,7 @@ sub reaper {
   # XXX hello?  configurable timeout?  hello?
   my $self = shift;
   async {
+    local $Coro::current->{desc} = 'Session Reaper';
      my $timeout = 300;  
      $timeout = $self->{reap_after} if $self->{reap_after} and $self->{reap_after} < $timeout;
      my $timer = Coro::Event->timer(interval => $timeout, );
@@ -481,7 +484,7 @@ sub debug {
       $output .= "$package:$line: ";
     }
     $output .= "@msg";
-    $self->debug_callback->($output);
+    $self->debug_callback->($output) if $self->can('debug_callback');
   }
 }
 

@@ -294,6 +294,12 @@ sub params {
     return @{$self->cached_params};
 }
 
+sub url_path {
+  my $self = shift;
+  my $path = $self->url->path;
+  return $path;
+}
+
 sub end_request {
     my $self = shift;
     $self->write_event->cancel if $self->write_event;
@@ -349,6 +355,7 @@ sub print {
     } else {
         $e->next; $self->conn->print(@_); 
     }
+    Coro::cede();
     return 1;
 }
 
