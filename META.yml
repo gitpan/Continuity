@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Continuity
-version:            1.4
+version:            1.5
 abstract:           Abstract away statelessness of HTTP, for stateful Web applications
 author:
     - Brock Wilcox <awwaiid@thelackthereof.org>
@@ -19,7 +19,7 @@ no_index:
     directory:
         - t
         - inc
-generated_by:       ExtUtils::MakeMaker version 6.55_02 and then some
+generated_by:       ExtUtils::MakeMaker version 6.57_05 and then some
 meta-spec:
     url:      http://module-build.sourceforge.net/META-spec-v1.4.html
     version:  1.4
