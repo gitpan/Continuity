@@ -1,6 +1,6 @@
 package Continuity;
 
-our $VERSION = '1.5';
+our $VERSION = '1.6';
 
 =head1 NAME
 
@@ -241,7 +241,7 @@ Arguments:
 
 =over 4
 
-=item * C<callback> -- coderef of the main application to run persistantly for each unique visitor -- defaults to C<\&::main>
+=item * C<callback> -- coderef of the main application to run persistently for each unique visitor -- defaults to C<\&::main>
 
 =item * C<adapter> -- defaults to an instance of C<Continuity::Adapt::HttpDaemon>
 
@@ -319,7 +319,7 @@ sub new {
   }
 
   # Set up the default Adapter.
-  # The adapater plugs the system into a server (probably a Web server)
+  # The adapter plugs the system into a server (probably a Web server)
   # The default has its very own HTTP::Daemon running.
   if(!$self->{adapter} || !(ref $self->{adapter})) {
     my $adapter_name = 'HttpDaemon';
@@ -507,7 +507,7 @@ L<AnyEvent::DBI> and L<Coro::Mysql> for concurrent database access.
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2011 Brock Wilcox <awwaiid@thelackthereof.org>. All
+  Copyright (c) 2004-2014 Brock Wilcox <awwaiid@thelackthereof.org>. All
   rights reserved.  This program is free software; you can redistribute it
   and/or modify it under the same terms as Perl itself.
 

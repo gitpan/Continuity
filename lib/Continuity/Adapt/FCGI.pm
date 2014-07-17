@@ -1,4 +1,3 @@
-
 package Continuity::Adapt::FCGI;
 
 use strict;
@@ -29,7 +28,7 @@ objects that are sent to applications running inside Continuity.
 =item $server = new Continuity::Adapt::FCGI(...)
 
 Create a new continuation adapter and HTTP::Daemon. This actually starts the
-HTTP server which is embeded.
+HTTP server which is embedded.
 
 =cut
 
@@ -364,7 +363,7 @@ L<Continuity>
 
 =head1 COPYRIGHT
 
-  Copyright (c) 2004-2009 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
+  Copyright (c) 2004-2014 Brock Wilcox <awwaiid@thelackthereof.org>. All rights
   reserved.  This program is free software; you can redistribute it and/or
   modify it under the same terms as Perl itself.
 

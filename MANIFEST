@@ -1,3 +1,4 @@
+.travis.yml
 Changes
 MANIFEST
 Makefile.PL
@@ -53,4 +54,5 @@ t/06_params.t
 t/07_callback_counter.t
 t/test_helper.pl
 util/highport.c
-META.yml                                 Module meta-data (added by MakeMaker)
+META.yml                                 Module YAML meta-data (added by MakeMaker)
+META.json                                Module JSON meta-data (added by MakeMaker)
